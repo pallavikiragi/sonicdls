@@ -1,20 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Sonic Design System (Sonic DLS)
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/401743cd-4d39-4b9c-a574-e6350eae1b15
+An interactive sound design language system (DLS) for a premium car infotainment UI using Tone.js.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+Prerequisites: Node.js
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+
+   ```bash
+   npm install
+   ```
+
+2. Run the app:
+
+   ```bash
+   npm run dev
+   ```
+
+## Deploy to GitHub Pages
+
+This repo is preconfigured to build correctly for GitHub Pages (Vite `base` set to relative paths).
+
+I added a GitHub Actions workflow that builds the site and deploys the `dist` output to GitHub Pages on pushes to `main`.
+
+If you prefer manual deploys, you can build locally and push the `dist` contents to your Pages branch.
