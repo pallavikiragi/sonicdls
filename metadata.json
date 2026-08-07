@@ -1,0 +1,6 @@
+{
+  "name": "Sonic Design System",
+  "description": "An interactive sound design language system (DLS) for a premium car infotainment UI using Tone.js.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
