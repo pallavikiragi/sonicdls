@@ -5,6 +5,7 @@ import { InfotainmentUI } from './components/InfotainmentUI';
 import { CreateTokenPanel } from './components/CreateTokenPanel';
 import { AssignModal } from './components/AssignModal';
 import { EditSemanticModal } from './components/EditSemanticModal';
+import { exportAllWavs } from './lib/exportAudio';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<'DLS' | 'INFOTAINMENT'>('DLS');
@@ -38,6 +39,8 @@ export default function App() {
   } | null>(null);
 
   const [expanded, setExpanded] = useState({ primitive: true, semantic: true, component: true });
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isExportingWav, setIsExportingWav] = useState(false);
 
   useEffect(() => {
     audioEngine.updateBrand(brand);
@@ -162,6 +165,19 @@ export default function App() {
     a.download = `sonic-dls-${isDark ? 'dark' : 'light'}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  };
+
+  const handleExportWav = async () => {
+    setIsExportingWav(true);
+    try {
+      await exportAllWavs(brand);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsExportingWav(false);
+      setShowExportMenu(false);
+    }
   };
 
   const allDefsCombined = { ...COMPONENT_DEFS, ...customTokens };
@@ -179,12 +195,38 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-6">
-            <button
-              onClick={handleExportJSON}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm border border-app-border text-app-text hover:bg-app-surface-light transition-colors"
-            >
-              <Download size={14} /> Export JSON
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm border border-app-border text-app-text hover:bg-app-surface-light transition-colors"
+              >
+                <Download size={14} /> Export <ChevronDown size={14} />
+              </button>
+              {showExportMenu && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-app-surface border border-app-border rounded-md shadow-xl z-50 overflow-hidden">
+                  <button 
+                    onClick={() => { handleExportJSON(); setShowExportMenu(false); }}
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light border-b border-app-border transition-colors flex items-center gap-2"
+                  >
+                    Export as JSON
+                  </button>
+                  <button 
+                    onClick={handleExportWav}
+                    disabled={isExportingWav}
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isExportingWav ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-app-text/30 border-t-app-text rounded-full animate-spin"></div>
+                        Exporting WAV...
+                      </>
+                    ) : (
+                      'Export as WAV (ZIP)'
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
             {/* View Mode Toggle */}
             <div className="flex bg-app-surface-light rounded-sm p-1 border border-app-border">
               <button
