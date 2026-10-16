@@ -12,13 +12,15 @@ export function InfotainmentUI({
   playComponent, 
   assignments,
   allTokens,
-  onUpdateAssignment
+  onUpdateAssignment,
+  onOpenSettings
 }: { 
   brand: BrandTokens;
   playComponent: (id: string) => void;
   assignments: Record<string, string>;
   allTokens: string[];
   onUpdateAssignment: (element: string, token: string) => void;
+  onOpenSettings?: () => void;
 }) {
   // State for various HMI components
   const [isListening, setIsListening] = useState(false);
@@ -121,8 +123,12 @@ export function InfotainmentUI({
             <Music size={24} />
           </button>
           <button 
-            onClick={() => playComponent(assignments['Settings Tab'] || 'ui.tab.switch')}
+            onClick={() => {
+              playComponent(assignments['Settings Tab'] || 'ui.tab.switch');
+              if (onOpenSettings) onOpenSettings();
+            }}
             className="p-3 text-app-text-muted hover:text-app-text transition-colors"
+            title="Open Settings & Waveform Sampler"
           >
             <Settings size={24} />
           </button>

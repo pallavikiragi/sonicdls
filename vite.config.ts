@@ -6,15 +6,23 @@ import { defineConfig } from 'vite';
 export default defineConfig(() => {
   return {
     base: '/sonicdls/',
-
     plugins: [react(), tailwindcss()],
-
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/node_modules/tone/')) {
+              return 'tone';
+            }
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
-
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},

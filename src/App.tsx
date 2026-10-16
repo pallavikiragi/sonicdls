@@ -1,15 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Play, ChevronDown, ChevronRight, Activity, Volume2, Info, Moon, Sun, Layout, Monitor, Download } from 'lucide-react';
-import { audioEngine, BrandTokens, COMPONENT_DEFS, SEMANTIC_DEFS as DEFAULT_SEMANTIC_DEFS, resolveNotes } from './lib/audio';
-import { InfotainmentUI } from './components/InfotainmentUI';
-import { CreateTokenPanel } from './components/CreateTokenPanel';
-import { AssignModal } from './components/AssignModal';
-import { EditSemanticModal } from './components/EditSemanticModal';
-import { exportAllWavs } from './lib/exportAudio';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import { 
+  Play, ChevronDown, ChevronRight, Activity, Volume2, Info, Moon, Sun, 
+  Layout, Monitor, Download, Sliders, Waves, Layers, Tag, Grid, Radio,
+  Code, ArrowDown, Code2, Check, PlusCircle, Palette
+} from 'lucide-react';
+import { 
+  audioEngine, 
+  BrandTokens, 
+  COMPONENT_DEFS, 
+  SEMANTIC_DEFS as DEFAULT_SEMANTIC_DEFS, 
+  resolveNotes,
+  InteractionType,
+  CategoryType,
+  INTERACTION_GROUPS,
+  CATEGORY_GROUPS
+} from './lib/audio';
+const InfotainmentUI = lazy(() =>
+  import('./components/InfotainmentUI').then(module => ({ default: module.InfotainmentUI }))
+);
+const CreateTokenPanel = lazy(() =>
+  import('./components/CreateTokenPanel').then(module => ({ default: module.CreateTokenPanel }))
+);
+const AssignModal = lazy(() =>
+  import('./components/AssignModal').then(module => ({ default: module.AssignModal }))
+);
+const EditSemanticModal = lazy(() =>
+  import('./components/EditSemanticModal').then(module => ({ default: module.EditSemanticModal }))
+);
+const WaveformSamplerPanel = lazy(() =>
+  import('./components/WaveformSamplerPanel').then(module => ({ default: module.WaveformSamplerPanel }))
+);
+const SdkPanel = lazy(() =>
+  import('./components/SdkPanel').then(module => ({ default: module.SdkPanel }))
+);
+import { applyThemeColors, clearThemeColorOverrides, ThemePreviewModal, THEME_PRESETS } from './components/ThemeCustomizerPanel';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'DLS' | 'INFOTAINMENT'>('DLS');
+  const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS' | 'SDK'>('DLS');
+  const [copiedTokenToast, setCopiedTokenToast] = useState<string | null>(null);
+  const [downloadingWavToken, setDownloadingWavToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
+  const [showThemePreviewModal, setShowThemePreviewModal] = useState<boolean>(false);
+
+  // Grouping mode for Tokens tab: By Interaction (new) vs By Category (classic DLS)
+  const [groupBy, setGroupBy] = useState<'interaction' | 'category'>('interaction');
 
   const [brand, setBrand] = useState<BrandTokens>({
     scale: 'C4 major pentatonic',
@@ -31,10 +65,23 @@ export default function App() {
   const [showEditSemantic, setShowEditSemantic] = useState(false);
   const [assignInput, setAssignInput] = useState('');
   const [playedTokens, setPlayedTokens] = useState<Set<string>>(new Set());
+  const [playingComponents, setPlayingComponents] = useState<Set<string>>(new Set());
+
+  const handleAddSemanticToken = (
+    key: string,
+    def: { degrees: number[]; durMult: number; volOffset: number; desc?: string }
+  ) => {
+    setSemanticDefs(prev => ({
+      ...prev,
+      [key]: def
+    }));
+  };
 
   const [activeToken, setActiveToken] = useState<{
     component: string;
     semantic: string;
+    category?: string;
+    interaction?: string;
     resolved: { degrees: number[]; notes: string[]; freqs: number[]; dur: number; vol: number };
   } | null>(null);
 
@@ -45,6 +92,42 @@ export default function App() {
   useEffect(() => {
     audioEngine.updateBrand(brand);
   }, [brand]);
+
+  useEffect(() => {
+    const unsubscribe = audioEngine.onPlaybackChange((compId, isPlaying) => {
+      setPlayingComponents(prev => {
+        const next = new Set(prev);
+        if (isPlaying) {
+          next.add(compId);
+        } else {
+          next.delete(compId);
+        }
+        return next;
+      });
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sonic_dls_custom_theme');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.id === 'tweakcn-imported') {
+          clearThemeColorOverrides();
+          return;
+        }
+        if (parsed.colors) {
+          applyThemeColors(parsed.colors, { fontSans: parsed.fontSans, fontMono: parsed.fontMono });
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // Default to the imported TweakCN theme (CSS variables from index.css)
+    clearThemeColorOverrides();
+  }, []);
 
   useEffect(() => {
     if (isDark) {
@@ -84,9 +167,9 @@ export default function App() {
     const def = allDefs[compId];
     if (!def) return;
 
-    audioEngine.play(compId, def.semantic as keyof typeof DEFAULT_SEMANTIC_DEFS, brand, def.overrides || {});
+    audioEngine.play(compId, def.semantic, brand, def.overrides || {}, undefined, semanticDefs as any);
 
-    const semDef = semanticDefs[def.semantic as keyof typeof DEFAULT_SEMANTIC_DEFS];
+    const semDef = (semanticDefs as any)[def.semantic] || DEFAULT_SEMANTIC_DEFS.neutral;
     const degrees = def.overrides?.arpeggio || semDef.degrees;
     const resolvedNotes = resolveNotes(brand.scale, degrees);
     
@@ -102,6 +185,8 @@ export default function App() {
     setActiveToken({
       component: compId,
       semantic: def.semantic,
+      category: def.category,
+      interaction: def.interaction,
       resolved: {
         degrees: resolvedNotes.map(n => n.degree),
         notes: resolvedNotes.map(n => n.note),
@@ -109,6 +194,15 @@ export default function App() {
         dur,
         vol
       }
+    });
+  };
+
+  const pauseComponent = (compId: string) => {
+    audioEngine.pause(compId);
+    setPlayingComponents(prev => {
+      const next = new Set(prev);
+      next.delete(compId);
+      return next;
     });
   };
 
@@ -141,6 +235,9 @@ export default function App() {
 
       componentExport[k] = {
         semantic: v.semantic,
+        category: v.category,
+        interaction: v.interaction,
+        interactions: v.interactions || (v.interaction ? [v.interaction] : []),
         resolvedDegrees: resolvedNotes.map(n => n.degree),
         resolvedNotes: resolvedNotes.map(n => n.note),
         resolvedFreqs: resolvedNotes.map(n => n.freq),
@@ -152,7 +249,18 @@ export default function App() {
 
     const exportData = {
       meta: { version: "1.0", mode: isDark ? 'dark' : 'light' },
-      primitive: { ...brand, decayUnitMs: brand.decayUnit * 1000, attackMs: brand.attack * 1000 },
+      primitive: { 
+        ...brand, 
+        timbre: typeof brand.timbre === 'object' && brand.timbre !== null && brand.timbre.type === 'custom'
+          ? {
+              type: 'custom',
+              real: Array.from(brand.timbre.real),
+              imag: Array.from(brand.timbre.imag)
+            }
+          : brand.timbre,
+        decayUnitMs: brand.decayUnit * 1000, 
+        attackMs: brand.attack * 1000 
+      },
       semantic: semanticExport,
       component: componentExport,
       assignments
@@ -171,6 +279,7 @@ export default function App() {
   const handleExportWav = async () => {
     setIsExportingWav(true);
     try {
+      const { exportAllWavs } = await import('./lib/exportAudio');
       await exportAllWavs(brand);
     } catch (e) {
       console.error(e);
@@ -180,8 +289,93 @@ export default function App() {
     }
   };
 
+  const handleDownloadTokenWav = async (tokenKey: string, tokenDef?: any) => {
+    setDownloadingWavToken(tokenKey);
+    try {
+      const { downloadTokenWav } = await import('./lib/exportAudio');
+      await downloadTokenWav(tokenKey, brand, tokenDef);
+    } catch (err) {
+      console.error('Failed to download token WAV:', err);
+    } finally {
+      setDownloadingWavToken(null);
+    }
+  };
+
+  const handleCopyTokenSnippet = (tokenKey: string) => {
+    const snippet = `import { SonicDLS } from '@studio/sonic-dls'
+import tokens from './sonic-dls-export.json'
+const dls = new SonicDLS(tokens)
+dls.play('${tokenKey}')`;
+    navigator.clipboard.writeText(snippet);
+    setCopiedTokenToast(tokenKey);
+    setTimeout(() => {
+      setCopiedTokenToast(null);
+    }, 1500);
+  };
+
   const allDefsCombined = { ...COMPONENT_DEFS, ...customTokens };
-  const categories = Array.from(new Set(Object.values(allDefsCombined).map((d: any) => d.category)));
+
+  const INTERACTION_ORDER: InteractionType[] = [
+    'Input',
+    'Navigation',
+    'Confirmation',
+    'Error',
+    'Alert',
+    'Ambient',
+    'Voice'
+  ];
+
+  const CATEGORY_ORDER: CategoryType[] = [
+    'UI Interactions',
+    'Navigation',
+    'Alerts',
+    'Voice Assistant',
+    'Media & Comms'
+  ];
+
+  const getTokensForGroup = (groupKey: string) => {
+    if (groupBy === 'interaction') {
+      return Object.entries(allDefsCombined).filter(([_, v]: [string, any]) => {
+        if (v.interactions && Array.isArray(v.interactions)) {
+          return v.interactions.includes(groupKey);
+        }
+        return v.interaction === groupKey;
+      });
+    } else {
+      return Object.entries(allDefsCombined).filter(([_, v]: [string, any]) => {
+        return v.category === groupKey;
+      });
+    }
+  };
+
+  const activeGroups = groupBy === 'interaction'
+    ? INTERACTION_ORDER.map(key => ({
+        key,
+        label: INTERACTION_GROUPS[key].label,
+        desc: INTERACTION_GROUPS[key].desc,
+        badge: INTERACTION_GROUPS[key].badge,
+        tokens: getTokensForGroup(key)
+      }))
+    : [
+        ...CATEGORY_ORDER.map(key => ({
+          key,
+          label: CATEGORY_GROUPS[key].label,
+          desc: CATEGORY_GROUPS[key].desc,
+          badge: 'dls',
+          tokens: getTokensForGroup(key)
+        })),
+        ...Array.from(new Set(
+          Object.values(allDefsCombined)
+            .map((d: any) => d.category)
+            .filter(c => !CATEGORY_ORDER.includes(c as any))
+        )).map(key => ({
+          key,
+          label: key,
+          desc: 'Custom category user tokens',
+          badge: 'custom',
+          tokens: getTokensForGroup(key)
+        }))
+      ];
 
   return (
     <div className="relative h-screen flex flex-col font-sans bg-app-bg text-app-text overflow-hidden">
@@ -189,16 +383,99 @@ export default function App() {
       {/* BRAND EDITOR TOP BAR */}
       <div className="h-auto border-b border-app-border bg-app-surface px-6 py-4 shrink-0 transition-colors">
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            <Activity className="text-app-accent" size={20} />
-            <h1 className="text-sm font-semibold tracking-wide uppercase text-app-text">Sonic DLS</h1>
+          {/* LEFT: Logo Sonic DLS + Dark/Light Mode Toggle next to it */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-md bg-gradient-to-tr from-app-accent to-indigo-500 flex items-center justify-center text-white shadow-sm ring-1 ring-white/10">
+                <Activity size={18} />
+              </div>
+              <div className="flex flex-col">
+                <h1 className="text-sm font-bold tracking-wider uppercase text-app-text leading-tight">Sonic DLS</h1>
+                <span className="text-[10px] text-app-text-muted font-mono leading-none">Sound Design System</span>
+              </div>
+            </div>
+
+            {/* Light / Dark Mode Toggle right next to logo */}
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-app-border bg-app-surface-light/60 text-app-text-muted hover:text-app-text hover:border-app-text/40 transition-colors shadow-xs ml-1"
+              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDark ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
           </div>
           
-          <div className="flex items-center gap-6">
+          {/* CENTER: Navigation [ Tokens ] [ Prototype ] [ Settings ] [ SDK ] */}
+          <nav className="flex items-center bg-app-surface-light rounded-md p-1 border border-app-border shadow-xs">
+            <button
+              onClick={() => setViewMode('DLS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
+                viewMode === 'DLS' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              }`}
+            >
+              <Monitor size={13} /> Tokens
+            </button>
+            <button
+              onClick={() => setViewMode('INFOTAINMENT')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
+                viewMode === 'INFOTAINMENT' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              }`}
+            >
+              <Layout size={13} /> Prototype
+            </button>
+            <button
+              onClick={() => setViewMode('SETTINGS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
+                viewMode === 'SETTINGS' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              }`}
+            >
+              <Sliders size={13} /> Settings
+            </button>
+            <button
+              onClick={() => setViewMode('SDK')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
+                viewMode === 'SDK' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              }`}
+            >
+              <Code2 size={13} /> SDK
+            </button>
+          </nav>
+
+          {/* RIGHTMOST: Themes Preview + Create Component CTA + Export Dropdown */}
+          <div className="flex items-center gap-2">
+            {/* Themes Previewer Button */}
+            <button
+              onClick={() => setShowThemePreviewModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md border border-app-border text-app-text-muted hover:text-app-text hover:bg-app-surface-light transition-colors shadow-xs"
+              title="Preview clean, modern visual styles and themes"
+            >
+              <Palette size={13} className="text-app-accent" />
+              <span>Themes</span>
+            </button>
+
+            {/* Create CTA Button (creates Component or Semantic token) */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (viewMode === 'DLS') {
+                    setShowCreateToken(true);
+                  } else {
+                    setViewMode('CREATE');
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md bg-app-accent hover:bg-blue-600 text-white shadow-sm transition-all active:scale-98"
+                title="Create a Component or Semantic Token"
+              >
+                <PlusCircle size={14} />
+                <span>Create Token</span>
+              </button>
+            </div>
+
+            {/* Export Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm border border-app-border text-app-text hover:bg-app-surface-light transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-md border border-app-border text-app-text hover:bg-app-surface-light transition-colors shadow-xs"
               >
                 <Download size={14} /> Export <ChevronDown size={14} />
               </button>
@@ -227,34 +504,6 @@ export default function App() {
                 </div>
               )}
             </div>
-            {/* View Mode Toggle */}
-            <div className="flex bg-app-surface-light rounded-sm p-1 border border-app-border">
-              <button
-                onClick={() => setViewMode('DLS')}
-                className={`flex items-center gap-2 px-4 py-1 text-xs uppercase tracking-wider rounded-sm transition-colors ${
-                  viewMode === 'DLS' ? 'bg-app-accent text-white font-medium shadow-sm' : 'text-app-text-muted hover:text-app-text'
-                }`}
-              >
-                <Monitor size={14} /> Explorer
-              </button>
-              <button
-                onClick={() => setViewMode('INFOTAINMENT')}
-                className={`flex items-center gap-2 px-4 py-1 text-xs uppercase tracking-wider rounded-sm transition-colors ${
-                  viewMode === 'INFOTAINMENT' ? 'bg-app-accent text-white font-medium shadow-sm' : 'text-app-text-muted hover:text-app-text'
-                }`}
-              >
-                <Layout size={14} /> Prototype
-              </button>
-            </div>
-
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="w-8 h-8 flex items-center justify-center rounded-sm border border-app-border text-app-text-muted hover:text-app-text hover:border-app-text transition-colors"
-              title="Toggle Visual & Sonic Theme"
-            >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
           </div>
         </div>
 
@@ -326,17 +575,41 @@ export default function App() {
           <div className="flex gap-4 px-6 relative">
             <div className="absolute -top-3 left-6 bg-app-surface px-2 text-[9px] uppercase tracking-widest text-app-text-muted font-bold">Timbre</div>
             <div className="flex flex-col gap-2">
-              <select 
-                value={brand.timbre} 
-                onChange={e => setBrand(b => ({ ...b, timbre: e.target.value as any }))} 
-                className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none capitalize"
-              >
-                <option value="sine">Sine</option>
-                <option value="triangle">Triangle</option>
-                <option value="square">Square</option>
-                <option value="sawtooth">Sawtooth</option>
-              </select>
-              <span className="text-[10px] text-app-text-muted text-center">WAVE</span>
+              <div className="flex items-center gap-1.5">
+                <select 
+                  value={typeof brand.timbre === 'object' ? 'custom' : brand.timbre} 
+                  onChange={e => {
+                    if (e.target.value === 'custom') {
+                      setViewMode('SETTINGS');
+                    } else {
+                      setBrand(b => ({ ...b, timbre: e.target.value as any }));
+                    }
+                  }} 
+                  className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none capitalize"
+                >
+                  <option value="sine">Sine</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="square">Square</option>
+                  <option value="sawtooth">Sawtooth</option>
+                  {typeof brand.timbre === 'object' && (
+                    <option value="custom">Custom (Sampled)</option>
+                  )}
+                </select>
+                <button
+                  onClick={() => setViewMode('SETTINGS')}
+                  className={`text-[10px] px-2 py-1.5 rounded border transition-colors whitespace-nowrap font-medium ${
+                    typeof brand.timbre === 'object'
+                      ? 'bg-app-accent/15 border-app-accent text-app-accent'
+                      : 'bg-app-surface-light border-app-border text-app-text-muted hover:text-app-text'
+                  }`}
+                  title="Open Waveform Sampler Panel"
+                >
+                  Sampler
+                </button>
+              </div>
+              <span className="text-[10px] text-app-text-muted text-center">
+                {typeof brand.timbre === 'object' ? 'PERIODIC WAVE (32 HARMONICS)' : 'WAVE'}
+              </span>
             </div>
 
             <div className="flex flex-col gap-2 w-[100px]">
@@ -378,7 +651,26 @@ export default function App() {
         </div>
       </div>
 
-      {viewMode === 'INFOTAINMENT' ? (
+      <Suspense fallback={null}>
+      {viewMode === 'CREATE' ? (
+        <CreateTokenPanel
+          isFullView
+          brand={brand}
+          semanticDefs={semanticDefs}
+          onAddComponent={(name, def, originalName) => {
+            if (originalName && originalName !== name) {
+              setCustomTokens(prev => {
+                const copy = { ...prev };
+                delete copy[originalName];
+                return { ...copy, [name]: def };
+              });
+            } else {
+              setCustomTokens(prev => ({ ...prev, [name]: def }));
+            }
+          }}
+          onAddSemantic={handleAddSemanticToken}
+        />
+      ) : viewMode === 'INFOTAINMENT' ? (
         <InfotainmentUI 
           brand={brand} 
           playComponent={playComponent} 
@@ -387,6 +679,20 @@ export default function App() {
           onUpdateAssignment={(elementName, token) => {
             setAssignments(prev => ({ ...prev, [elementName]: token }));
           }}
+          onOpenSettings={() => setViewMode('SETTINGS')}
+        />
+      ) : viewMode === 'SETTINGS' ? (
+        <WaveformSamplerPanel
+          brand={brand}
+          onUpdateBrandTimbre={(newTimbre) => setBrand(b => ({ ...b, timbre: newTimbre }))}
+          onNavigateToExplorer={() => setViewMode('DLS')}
+        />
+      ) : viewMode === 'SDK' ? (
+        <SdkPanel
+          brand={brand}
+          customTokens={customTokens}
+          onPlayToken={(id) => playComponent(id)}
+          onNavigateToSettings={() => setViewMode('SETTINGS')}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">
@@ -413,7 +719,13 @@ export default function App() {
                   {Object.entries(brand).map(([k, v]: [string, any]) => (
                     <div key={k} className="flex justify-between text-[11px] font-mono text-app-text-muted border-l border-app-border pl-2">
                       <span>brand.{k}</span>
-                      <span className="text-app-accent">{typeof v === 'number' ? v.toFixed(2) : v}</span>
+                      <span className="text-app-accent">
+                        {typeof v === 'number' 
+                          ? v.toFixed(2) 
+                          : typeof v === 'object' && v !== null && v.type === 'custom'
+                            ? 'custom (32 harmonics)' 
+                            : String(v)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -459,15 +771,68 @@ export default function App() {
                 className="w-full flex items-center justify-between p-2 text-xs uppercase tracking-wider font-medium text-app-text hover:bg-app-surface-light rounded transition-colors"
                 onClick={() => setExpanded(e => ({ ...e, component: !e.component }))}
               >
-                <span>3. Component</span>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span>3. Component</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-app-surface-light border border-app-border text-app-accent font-mono">
+                    {groupBy === 'interaction' ? 'Interaction' : 'Category'}
+                  </span>
+                </div>
                 {expanded.component ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
               {expanded.component && (
-                <div className="pl-4 pr-2 py-2 space-y-3">
-                  {Object.entries({ ...COMPONENT_DEFS, ...customTokens }).map(([k, v]: [string, any]) => (
-                    <div key={k} className={`border-l pl-2 ${customTokens[k] ? 'border-[#A78BFA]' : 'border-app-border'}`}>
-                      <div className="text-[11px] font-mono text-app-text">{k}</div>
-                      <div className="text-[10px] text-app-text-muted mt-0.5">→ semantic.{v.semantic}</div>
+                <div className="pl-2 pr-1 py-2 space-y-3">
+                  {activeGroups.map(grp => (
+                    <div key={grp.key} className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-app-text-muted px-2 py-1 bg-app-surface-light/60 rounded border border-app-border/40">
+                        <span className="truncate">{grp.label}</span>
+                        <span className="font-mono text-[9px] px-1.5 bg-app-surface rounded text-app-accent border border-app-border">
+                          {grp.tokens.length}
+                        </span>
+                      </div>
+                      <div className="pl-2 space-y-1">
+                        {grp.tokens.map(([k, v]: [string, any]) => {
+                          const isSelected = activeToken?.component === k;
+                          const isPlaying = playingComponents.has(k);
+                          return (
+                            <div
+                              key={k}
+                              className={`w-full text-left p-1.5 rounded transition-colors flex items-center justify-between group/side ${
+                                isSelected 
+                                  ? 'bg-app-accent/15 text-app-accent border-l-2 border-app-accent pl-2' 
+                                  : customTokens[k]
+                                    ? 'hover:bg-app-surface-light text-app-text-muted hover:text-app-text border-l-2 border-[#A78BFA] pl-2'
+                                    : 'hover:bg-app-surface-light text-app-text-muted hover:text-app-text border-l border-app-border pl-2'
+                              }`}
+                            >
+                              <button
+                                onClick={() => playComponent(k)}
+                                className="truncate text-left flex-1"
+                                title={`Select & play ${k}`}
+                              >
+                                <div className="text-[11px] font-mono leading-tight truncate">{k}</div>
+                                <div className="text-[9px] text-app-text-muted opacity-80 mt-0.5 truncate">
+                                  → semantic.{v.semantic}
+                                </div>
+                              </button>
+
+                              <div className="flex items-center shrink-0 ml-1.5" onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => playComponent(k)}
+                                  title={`Play ${k}`}
+                                  className={`p-1 rounded transition-colors ${
+                                    isPlaying
+                                      ? 'bg-app-accent text-white shadow-sm ring-1 ring-app-accent/50'
+                                      : 'text-app-text-muted hover:text-white hover:bg-app-accent'
+                                  }`}
+                                >
+                                  <Play size={10} className={isPlaying ? 'fill-current animate-pulse' : ''} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -490,10 +855,11 @@ export default function App() {
             )}
 
             <button 
-              onClick={() => setShowCreateToken(true)}
-              className="mt-6 w-full p-2 border border-dashed border-app-border rounded text-xs text-app-text-muted hover:text-app-text hover:border-app-text transition-colors uppercase tracking-wider"
+              onClick={() => setViewMode('CREATE')}
+              className="mt-6 w-full p-2 border border-dashed border-app-border rounded text-xs text-app-text-muted hover:text-app-accent hover:border-app-accent transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5"
             >
-              + Create component token
+              <PlusCircle size={13} />
+              <span>+ Create Token (Semantic or Component)</span>
             </button>
 
           </div>
@@ -501,15 +867,74 @@ export default function App() {
 
         {/* MID COL: PLAYGROUND */}
         <div className="flex-1 overflow-y-auto bg-app-bg p-8">
-          <div className="max-w-4xl mx-auto space-y-12">
-            {categories.map(cat => (
-              <div key={cat}>
-                <h3 className="text-[10px] uppercase tracking-widest text-app-text-muted font-bold mb-4 border-b border-app-border pb-2">{cat}</h3>
+          <div className="max-w-4xl mx-auto space-y-10">
+
+            {/* TOP BAR OF TOKENS TAB: VIEW TOGGLE [ By Interaction ] [ By Category ] */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-app-border">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-app-text">
+                    Sonic DLS Tokens
+                  </h2>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-app-surface-light border border-app-border text-app-text-muted font-semibold">
+                    {Object.keys(allDefsCombined).length} Tokens
+                  </span>
+                </div>
+                <p className="text-xs text-app-text-muted mt-1">
+                  {groupBy === 'interaction' 
+                    ? 'Interaction structure (per designer feedback): Input, Navigation, Confirmation, Error, Alert, Ambient, Voice.'
+                    : 'Classic DLS category structure: UI Interactions, Navigation, Alerts, Voice Assistant, Media & Comms.'}
+                </p>
+              </div>
+
+              {/* Toggle Buttons: [ By Interaction ]  [ By Category ] */}
+              <div className="flex items-center bg-app-surface-light p-1 rounded-md border border-app-border shadow-inner shrink-0">
+                <button
+                  onClick={() => setGroupBy('interaction')}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-all ${
+                    groupBy === 'interaction'
+                      ? 'bg-app-accent text-white shadow-sm'
+                      : 'text-app-text-muted hover:text-app-text'
+                  }`}
+                >
+                  <Tag size={13} /> By Interaction
+                </button>
+                <button
+                  onClick={() => setGroupBy('category')}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-all ${
+                    groupBy === 'category'
+                      ? 'bg-app-accent text-white shadow-sm'
+                      : 'text-app-text-muted hover:text-app-text'
+                  }`}
+                >
+                  <Grid size={13} /> By Category
+                </button>
+              </div>
+            </div>
+
+            {/* TOKEN GROUPS ACCORDING TO ACTIVE TOGGLE */}
+            {activeGroups.map(grp => (
+              <div key={grp.key} id={`group-${grp.key}`} className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-app-border pb-2">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <h3 className="text-xs uppercase tracking-widest text-app-text font-bold">
+                      {grp.label}
+                    </h3>
+                    <span className="text-xs text-app-text-muted font-normal">
+                      — {grp.desc}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-app-text-muted bg-app-surface-light px-2 py-0.5 rounded border border-app-border shrink-0">
+                    {grp.tokens.length} {grp.tokens.length === 1 ? 'token' : 'tokens'}
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(allDefsCombined).filter(([_, v]: [string, any]) => v.category === cat).map(([k, v]: [string, any]) => {
-                    const isSafety = cat === 'Safety Alerts';
+                  {grp.tokens.map(([k, v]: [string, any]) => {
+                    const isSafety = grp.key === 'Alert' || v.category === 'Alerts';
                     const isCustom = !!customTokens[k];
                     const isActive = activeToken?.component === k;
+                    const isPlaying = playingComponents.has(k);
                     const hasPlayed = playedTokens.has(k);
 
                     const semDef = semanticDefs[v.semantic as keyof typeof DEFAULT_SEMANTIC_DEFS];
@@ -517,27 +942,102 @@ export default function App() {
                     const freqStr = resolvedNotes[0] ? `${Math.round(resolvedNotes[0].freq)} Hz` : '';
                     let dur = brand.decayUnit * semDef.durMult;
                     if (v.overrides?.durMult) dur *= v.overrides.durMult;
+                    if (k === 'nav.arrived') dur = Math.min(dur, 0.8);
+                    else dur = Math.min(dur, 0.5);
                     const badgeText = `${freqStr} · ${Math.round(dur * 1000)}ms`;
 
                     return (
                       <div key={k} className="relative group">
-                        <button
+                        <div
                           onClick={() => playComponent(k)}
-                          className={`w-full relative flex flex-col p-4 text-left border rounded-[4px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)] ${
+                          className={`w-full relative flex flex-col p-4 text-left border rounded-[4px] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)] ${
                             isSafety ? 'border-l-2 border-l-[#F5A623]' : isCustom ? 'border-l-2 border-l-[#A78BFA]' : ''
                           } ${
-                            isActive
-                              ? isSafety ? 'bg-[#F59E0B1A] border-app-amber shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-[#3B82F61A] border-app-accent shadow-[0_0_15px_rgba(59,130,246,0.2)]'
-                              : 'bg-app-surface border-app-border hover:border-app-text-muted'
+                            isPlaying
+                              ? isSafety
+                                ? 'bg-[#F59E0B20] border-app-amber shadow-[0_0_15px_rgba(245,158,11,0.3)] ring-1 ring-app-amber/50'
+                                : 'bg-[#3B82F620] border-app-accent shadow-[0_0_15px_rgba(59,130,246,0.3)] ring-1 ring-app-accent/50'
+                              : isActive
+                                ? isSafety ? 'bg-[#F59E0B1A] border-app-amber shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-[#3B82F61A] border-app-accent shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                                : 'bg-app-surface border-app-border hover:border-app-text-muted'
                           }`}
                         >
-                          {hasPlayed && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#3DD68C]"></div>}
+                          {hasPlayed && !isPlaying && (
+                            <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#3DD68C]" title="Previously played"></div>
+                          )}
                           
-                          <div className="flex justify-between items-start mb-3 w-full">
-                            <span className={`text-xs font-mono font-medium pr-4 ${isSafety ? 'text-app-amber' : isActive ? 'text-app-accent' : 'text-app-text'}`}>
+                          {/* Top Row: Component Token Name & Dedicated Play / Pause Buttons */}
+                          <div className="flex items-start justify-between gap-2 mb-2 w-full">
+                            <span className={`text-xs font-mono font-medium truncate flex-1 ${
+                              isSafety ? 'text-app-amber' : isActive || isPlaying ? 'text-app-accent' : 'text-app-text'
+                            }`}>
                               {k}
                             </span>
-                            <Play size={14} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isSafety ? 'text-app-amber' : 'text-app-accent'}`} />
+
+                            {/* Component Play, Pause, WAV Download, and Copy Snippet Buttons */}
+                            <div 
+                              className="flex items-center gap-0.5 shrink-0 bg-app-surface-light p-0.5 rounded border border-app-border shadow-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* [ ▶ ] Play */}
+                              <button
+                                type="button"
+                                onClick={() => playComponent(k)}
+                                title={`Play ${k}`}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                                  isPlaying
+                                    ? isSafety
+                                      ? 'bg-app-amber text-black font-bold shadow-xs ring-1 ring-app-amber animate-pulse'
+                                      : 'bg-app-accent text-white font-bold shadow-xs ring-1 ring-app-accent animate-pulse'
+                                    : 'text-app-text-muted hover:text-white hover:bg-app-accent active:scale-95'
+                                }`}
+                              >
+                                <Play size={10} className={isPlaying ? 'fill-current' : ''} />
+                                <span className="hidden xl:inline">Play</span>
+                              </button>
+
+                              {/* [ ↓ ] Download WAV */}
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadTokenWav(k, v)}
+                                disabled={downloadingWavToken === k}
+                                title={`Download ${k.replace(/\./g, '-')}.wav`}
+                                className="p-1 rounded text-app-text-muted hover:text-app-accent hover:bg-app-surface active:scale-95 transition-all"
+                              >
+                                {downloadingWavToken === k ? (
+                                  <div className="w-2.5 h-2.5 border-2 border-app-accent border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <ArrowDown size={11} />
+                                )}
+                              </button>
+
+                              {/* [ </> ] Copy npm snippet */}
+                              <button
+                                type="button"
+                                onClick={() => handleCopyTokenSnippet(k)}
+                                title={`Copy npm snippet for ${k}`}
+                                className="p-1 rounded text-app-text-muted hover:text-app-accent hover:bg-app-surface active:scale-95 transition-all"
+                              >
+                                {copiedTokenToast === k ? (
+                                  <Check size={11} className="text-emerald-400" />
+                                ) : (
+                                  <Code size={11} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Secondary tag showing either Interaction or Category + Playing status */}
+                          <div className="flex items-center justify-between gap-1.5 mb-2">
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-app-surface-light text-app-text-muted border border-app-border/60">
+                              {groupBy === 'interaction' ? v.category : (v.interaction || 'Input')}
+                            </span>
+
+                            {isPlaying && (
+                              <span className="flex items-center gap-1 text-[9px] font-mono text-app-accent font-semibold animate-pulse">
+                                <Activity size={10} className="animate-spin" /> Playing...
+                              </span>
+                            )}
                           </div>
                           
                           <span className="text-[10px] text-app-text-muted mt-auto line-clamp-1">{v.desc}</span>
@@ -545,18 +1045,18 @@ export default function App() {
                           <div className="absolute bottom-2 right-2 text-[9px] font-mono text-app-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
                             {badgeText}
                           </div>
-                        </button>
+                        </div>
                         
-                        <div className="absolute -top-3 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute -top-3 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <button 
                             onClick={(e) => { e.stopPropagation(); setEditTokenKey(k); }}
-                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-text hover:border-app-text"
+                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-text hover:border-app-text shadow-xs"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); setShowAssignModal(k); setAssignInput(''); }}
-                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-accent hover:border-app-accent"
+                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-accent hover:border-app-accent shadow-xs"
                           >
                             Assign
                           </button>
@@ -638,8 +1138,20 @@ export default function App() {
 
                 {/* Final Parameters */}
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-app-text-muted mb-3">Final Synthesis</div>
+                  <div className="text-[10px] uppercase tracking-widest text-app-text-muted mb-3">Classification & Synthesis</div>
                   <div className="space-y-3">
+                    <div className="flex justify-between border-b border-app-border pb-2">
+                      <span className="text-[11px] text-app-text-muted">Interaction</span>
+                      <span className="text-[11px] font-mono text-app-accent font-semibold">
+                        {activeToken.interaction || 'Input'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-app-border pb-2">
+                      <span className="text-[11px] text-app-text-muted">DLS Category</span>
+                      <span className="text-[11px] font-mono text-app-text">
+                        {activeToken.category || 'UI Interactions'}
+                      </span>
+                    </div>
                     <div className="flex justify-between border-b border-app-border pb-2">
                       <span className="text-[11px] text-app-text-muted">Notes</span>
                       <span className="text-[11px] font-mono text-app-text">
@@ -661,9 +1173,29 @@ export default function App() {
                     <div className="flex justify-between pb-2">
                       <span className="text-[11px] text-app-text-muted">Timbre</span>
                       <span className="text-[11px] font-mono text-app-text uppercase">
-                        {brand.timbre}
+                        {typeof brand.timbre === 'object' && brand.timbre !== null && brand.timbre.type === 'custom'
+                          ? 'CUSTOM (PERIODIC WAVE)'
+                          : String(brand.timbre)}
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Inspector Component Playback Control */}
+                <div className="pt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => playComponent(activeToken.component)}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded text-xs font-semibold uppercase tracking-wider transition-all shadow-xs ${
+                        playingComponents.has(activeToken.component)
+                          ? 'bg-app-accent text-white ring-2 ring-app-accent/60 font-bold animate-pulse'
+                          : 'bg-app-accent text-white hover:bg-blue-600 active:scale-95'
+                      }`}
+                    >
+                      <Play size={13} className={playingComponents.has(activeToken.component) ? 'fill-current' : ''} />
+                      <span>{playingComponents.has(activeToken.component) ? 'Playing Token...' : 'Play Token'}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -674,62 +1206,88 @@ export default function App() {
 
       </div>
       )}
+      </Suspense>
 
       {showCreateToken && (
-        <CreateTokenPanel 
-          brand={brand}
-          onClose={() => setShowCreateToken(false)}
-          onAdd={(name, def) => {
-            setCustomTokens(prev => ({ ...prev, [name]: def }));
-            setShowCreateToken(false);
-          }}
-          onPreview={(def) => {
-            audioEngine.play('preview', def.semantic, brand, def.overrides);
-          }}
-        />
+        <Suspense fallback={null}>
+          <CreateTokenPanel 
+            brand={brand}
+            semanticDefs={semanticDefs}
+            onClose={() => setShowCreateToken(false)}
+            onAddComponent={(name, def) => {
+              setCustomTokens(prev => ({ ...prev, [name]: def }));
+              setShowCreateToken(false);
+            }}
+            onAddSemantic={(key, def) => {
+              handleAddSemanticToken(key, def);
+              setShowCreateToken(false);
+            }}
+          />
+        </Suspense>
       )}
 
       {editTokenKey && (
-        <CreateTokenPanel 
-          brand={brand}
-          initialData={{ name: editTokenKey, def: allDefsCombined[editTokenKey as keyof typeof allDefsCombined] }}
-          onClose={() => setEditTokenKey(null)}
-          onAdd={(name, def, originalName) => {
-            setCustomTokens(prev => {
-              const next = { ...prev, [name]: def };
-              if (originalName && originalName !== name) {
-                delete next[originalName];
-              }
-              return next;
-            });
-            setEditTokenKey(null);
-          }}
-          onPreview={(def) => {
-            audioEngine.play('preview', def.semantic, brand, def.overrides);
-          }}
-        />
+        <Suspense fallback={null}>
+          <CreateTokenPanel 
+            brand={brand}
+            semanticDefs={semanticDefs}
+            initialData={{ type: 'component', name: editTokenKey, def: allDefsCombined[editTokenKey as keyof typeof allDefsCombined] }}
+            onClose={() => setEditTokenKey(null)}
+            onAddComponent={(name, def, originalName) => {
+              setCustomTokens(prev => {
+                const next = { ...prev, [name]: def };
+                if (originalName && originalName !== name) {
+                  delete next[originalName];
+                }
+                return next;
+              });
+              setEditTokenKey(null);
+            }}
+            onAddSemantic={(key, def) => {
+              handleAddSemanticToken(key, def);
+              setEditTokenKey(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {showAssignModal && (
-        <AssignModal 
-          token={showAssignModal}
-          onClose={() => setShowAssignModal(null)}
-          onAssign={(elementName) => {
-            setAssignments(prev => ({ ...prev, [elementName]: showAssignModal }));
-            setShowAssignModal(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AssignModal 
+            token={showAssignModal}
+            onClose={() => setShowAssignModal(null)}
+            onAssign={(elementName) => {
+              setAssignments(prev => ({ ...prev, [elementName]: showAssignModal }));
+              setShowAssignModal(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {showEditSemantic && (
-        <EditSemanticModal 
-          initialDefs={semanticDefs}
-          onClose={() => setShowEditSemantic(false)}
-          onSave={(defs) => {
-            setSemanticDefs(defs);
-            setShowEditSemantic(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <EditSemanticModal 
+            initialDefs={semanticDefs}
+            onClose={() => setShowEditSemantic(false)}
+            onSave={(defs) => {
+              setSemanticDefs(defs);
+              setShowEditSemantic(false);
+            }}
+          />
+        </Suspense>
+      )}
+
+      {/* THEME PREVIEW MODAL */}
+      <ThemePreviewModal
+        isOpen={showThemePreviewModal}
+        onClose={() => setShowThemePreviewModal(false)}
+      />
+
+      {/* TOAST NOTIFICATION (CHANGE 2) */}
+      {copiedTokenToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold animate-fade-in">
+          <Check size={14} /> Copied!
+        </div>
       )}
     </div>
   );
