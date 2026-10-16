@@ -1,6 +1,163 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.9783 0.0067 295.4528);
+  --foreground: oklch(0.2284 0.0384 282.9324);
+  --card: oklch(1.0000 0 0);
+  --card-foreground: oklch(0.2284 0.0384 282.9324);
+  --popover: oklch(1.0000 0 0);
+  --popover-foreground: oklch(0.2284 0.0384 282.9324);
+  --primary: oklch(0.6056 0.2189 292.7172);
+  --primary-foreground: oklch(1.0000 0 0);
+  --secondary: oklch(0.9297 0.0219 297.4068);
+  --secondary-foreground: oklch(0.3796 0.1783 293.7446);
+  --muted: oklch(0.8656 0.0223 297.3675);
+  --muted-foreground: oklch(0.5244 0.0408 293.7605);
+  --accent: oklch(0.5413 0.2466 293.0090);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.6368 0.2078 25.3313);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.9115 0.0150 294.4493);
+  --input: oklch(0.9115 0.0150 294.4493);
+  --ring: oklch(0.6056 0.2189 292.7172);
+  --chart-1: oklch(0.8100 0.1000 252);
+  --chart-2: oklch(0.6200 0.1900 260);
+  --chart-3: oklch(0.5500 0.2200 263);
+  --chart-4: oklch(0.4900 0.2200 264);
+  --chart-5: oklch(0.4200 0.1800 266);
+  --sidebar: oklch(0.9850 0 0);
+  --sidebar-foreground: oklch(0.1450 0 0);
+  --sidebar-primary: oklch(0.2050 0 0);
+  --sidebar-primary-foreground: oklch(0.9850 0 0);
+  --sidebar-accent: oklch(0.9700 0 0);
+  --sidebar-accent-foreground: oklch(0.2050 0 0);
+  --sidebar-border: oklch(0.9220 0 0);
+  --sidebar-ring: oklch(0.7080 0 0);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --radius: 0.625rem;
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 3px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: oklch(0 0 0);
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Sonic DLS token mappings (Light Mode) */
+  --app-font-sans: var(--font-sans);
+  --app-font-mono: var(--font-mono);
+  --app-bg: var(--background);
+  --app-surface: var(--card);
+  --app-surface-light: var(--secondary);
+  --app-border: var(--border);
+  --app-text: var(--foreground);
+  --app-text-muted: var(--muted-foreground);
+  --app-accent: var(--primary);
+  --app-secondary: var(--accent);
+  --app-amber: oklch(0.7724 0.1728 65.3670);
+}
+
+.dark, html.dark {
+  --background: oklch(0.1491 0.0171 284.1290);
+  --foreground: oklch(0.9288 0.0126 255.5078);
+  --card: oklch(0.1974 0.0240 283.9877);
+  --card-foreground: oklch(0.9288 0.0126 255.5078);
+  --popover: oklch(0.1974 0.0240 283.9877);
+  --popover-foreground: oklch(0.9288 0.0126 255.5078);
+  --primary: oklch(0.6056 0.2189 292.7172);
+  --primary-foreground: oklch(1.0000 0 0);
+  --secondary: oklch(0.2429 0.0304 283.9110);
+  --secondary-foreground: oklch(0.8112 0.1013 293.5712);
+  --muted: oklch(0.3058 0.0340 284.2069);
+  --muted-foreground: oklch(0.7107 0.0351 256.7878);
+  --accent: oklch(0.5413 0.2466 293.0090);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.6368 0.2078 25.3313);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.3092 0.0322 284.3630);
+  --input: oklch(0.3092 0.0322 284.3630);
+  --ring: oklch(0.6056 0.2189 292.7172);
+  --chart-1: oklch(0.8100 0.1000 252);
+  --chart-2: oklch(0.6200 0.1900 260);
+  --chart-3: oklch(0.5500 0.2200 263);
+  --chart-4: oklch(0.4900 0.2200 264);
+  --chart-5: oklch(0.4200 0.1800 266);
+  --sidebar: oklch(0.1491 0.0171 284.1290);
+  --sidebar-foreground: oklch(0.9288 0.0126 255.5078);
+  --sidebar-primary: oklch(0.6056 0.2189 292.7172);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.5413 0.2466 293.0090);
+  --sidebar-accent-foreground: oklch(1.0000 0 0);
+  --sidebar-border: oklch(0.3092 0.0322 284.3630);
+  --sidebar-ring: oklch(0.6056 0.2189 292.7172);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --radius: 0.625rem;
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 3px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: oklch(0 0 0);
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+
+  /* Sonic DLS token mappings (Dark Mode) */
+  --app-font-sans: var(--font-sans);
+  --app-font-mono: var(--font-mono);
+  --app-bg: var(--background);
+  --app-surface: var(--card);
+  --app-surface-light: var(--secondary);
+  --app-border: var(--border);
+  --app-text: var(--foreground);
+  --app-text-muted: var(--muted-foreground);
+  --app-accent: var(--primary);
+  --app-secondary: var(--accent);
+  --app-amber: oklch(0.7724 0.1728 65.3670);
+}
+
 @theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Sonic DLS app colors */
   --color-app-bg: var(--app-bg);
   --color-app-surface: var(--app-surface);
   --color-app-surface-light: var(--app-surface-light);
@@ -8,40 +165,18 @@
   --color-app-text: var(--app-text);
   --color-app-text-muted: var(--app-text-muted);
   --color-app-accent: var(--app-accent);
+  --color-app-secondary: var(--app-secondary);
   --color-app-amber: var(--app-amber);
-  --font-mono: 'Courier New', Courier, monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
 
-:root {
-  /* Light mode tokens */
-  --app-bg: #F8FAFC;
-  --app-surface: #FFFFFF;
-  --app-surface-light: #F1F5F9;
-  --app-border: #E2E8F0;
-  --app-text: #0F172A;
-  --app-text-muted: #64748B;
-  --app-accent: #2563EB;
-  --app-amber: #D97706;
-}
-
-html.dark {
-  /* Dark mode tokens */
-  --app-bg: #0A0A0F;
-  --app-surface: #13131A;
-  --app-surface-light: #1C1C26;
-  --app-border: #2D2D3D;
-  --app-text: #E2E8F0;
-  --app-text-muted: #8B8B9E;
-  --app-accent: #3B82F6;
-  --app-amber: #F59E0B;
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
 }
 
 body {
+  font-family: var(--font-sans);
   background-color: var(--color-app-bg);
   color: var(--color-app-text);
   margin: 0;
   padding: 0;
   overflow: hidden;
 }
-
