@@ -2,7 +2,7 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 import { 
   Play, ChevronDown, ChevronRight, Activity, Volume2, Info, Moon, Sun, 
   Layout, Monitor, Download, Sliders, Waves, Layers, Tag, Grid, Radio,
-  Code, ArrowDown, Code2, Check, PlusCircle, Palette
+  ArrowDown, PlusCircle, Palette
 } from 'lucide-react';
 import { 
   audioEngine, 
@@ -30,14 +30,10 @@ const EditSemanticModal = lazy(() =>
 const WaveformSamplerPanel = lazy(() =>
   import('./components/WaveformSamplerPanel').then(module => ({ default: module.WaveformSamplerPanel }))
 );
-const SdkPanel = lazy(() =>
-  import('./components/SdkPanel').then(module => ({ default: module.SdkPanel }))
-);
 import { applyThemeColors, clearThemeColorOverrides, ThemePreviewModal, THEME_PRESETS } from './components/ThemeCustomizerPanel';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS' | 'SDK'>('DLS');
-  const [copiedTokenToast, setCopiedTokenToast] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS'>('DLS');
   const [downloadingWavToken, setDownloadingWavToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
   const [showThemePreviewModal, setShowThemePreviewModal] = useState<boolean>(false);
@@ -301,18 +297,6 @@ export default function App() {
     }
   };
 
-  const handleCopyTokenSnippet = (tokenKey: string) => {
-    const snippet = `import { SonicDLS } from '@studio/sonic-dls'
-import tokens from './sonic-dls-export.json'
-const dls = new SonicDLS(tokens)
-dls.play('${tokenKey}')`;
-    navigator.clipboard.writeText(snippet);
-    setCopiedTokenToast(tokenKey);
-    setTimeout(() => {
-      setCopiedTokenToast(null);
-    }, 1500);
-  };
-
   const allDefsCombined = { ...COMPONENT_DEFS, ...customTokens };
 
   const INTERACTION_ORDER: InteractionType[] = [
@@ -405,7 +389,7 @@ dls.play('${tokenKey}')`;
             </button>
           </div>
           
-          {/* CENTER: Navigation [ Tokens ] [ Prototype ] [ Settings ] [ SDK ] */}
+          {/* CENTER: Navigation [ Tokens ] [ Prototype ] [ Settings ] */}
           <nav className="flex items-center bg-app-surface-light rounded-md p-1 border border-app-border shadow-xs">
             <button
               onClick={() => setViewMode('DLS')}
@@ -430,14 +414,6 @@ dls.play('${tokenKey}')`;
               }`}
             >
               <Sliders size={13} /> Settings
-            </button>
-            <button
-              onClick={() => setViewMode('SDK')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
-                viewMode === 'SDK' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
-              }`}
-            >
-              <Code2 size={13} /> SDK
             </button>
           </nav>
 
@@ -686,13 +662,6 @@ dls.play('${tokenKey}')`;
           brand={brand}
           onUpdateBrandTimbre={(newTimbre) => setBrand(b => ({ ...b, timbre: newTimbre }))}
           onNavigateToExplorer={() => setViewMode('DLS')}
-        />
-      ) : viewMode === 'SDK' ? (
-        <SdkPanel
-          brand={brand}
-          customTokens={customTokens}
-          onPlayToken={(id) => playComponent(id)}
-          onNavigateToSettings={() => setViewMode('SETTINGS')}
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">
@@ -1011,19 +980,6 @@ dls.play('${tokenKey}')`;
                                 )}
                               </button>
 
-                              {/* [ </> ] Copy npm snippet */}
-                              <button
-                                type="button"
-                                onClick={() => handleCopyTokenSnippet(k)}
-                                title={`Copy npm snippet for ${k}`}
-                                className="p-1 rounded text-app-text-muted hover:text-app-accent hover:bg-app-surface active:scale-95 transition-all"
-                              >
-                                {copiedTokenToast === k ? (
-                                  <Check size={11} className="text-emerald-400" />
-                                ) : (
-                                  <Code size={11} />
-                                )}
-                              </button>
                             </div>
                           </div>
 
@@ -1283,12 +1239,6 @@ dls.play('${tokenKey}')`;
         onClose={() => setShowThemePreviewModal(false)}
       />
 
-      {/* TOAST NOTIFICATION (CHANGE 2) */}
-      {copiedTokenToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold animate-fade-in">
-          <Check size={14} /> Copied!
-        </div>
-      )}
     </div>
   );
 }
