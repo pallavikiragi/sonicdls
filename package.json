@@ -1,16 +1,40 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@pallavikiragi/sonic-design-system",
+  "version": "0.1.0",
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/public-api.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/index.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
+    "build:package": "vite build --config vite.config.lib.ts && tsc -p tsconfig.lib.json",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepack": "npm run build:package"
   },
-  "dependencies": {
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tonaljs/tonal": "^4.10.0",
@@ -24,9 +48,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tone": "^15.1.22",
-    "vite": "^6.2.3"
-  },
-  "devDependencies": {
+    "vite": "^6.2.3",
     "@types/express": "^4.17.21",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^22.14.0",
@@ -34,7 +56,6 @@
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "typescript": "~5.8.2"
   }
 }

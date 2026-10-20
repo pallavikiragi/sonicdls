@@ -1,20 +1,44 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Sonic Design System
 
-# Run and deploy your AI Studio app
+Sonic Design System is an interactive React UI for exploring and previewing a sound design language system. The project can be run as a website or installed as a React component package.
 
-This contains everything you need to run your app locally.
+## Use as a React package
 
-View your app in AI Studio: https://ai.studio/apps/401743cd-4d39-4b9c-a574-e6350eae1b15
+Install the package and its React peer dependencies:
 
-## Run Locally
+```bash
+npm install @pallavikiragi/sonic-design-system react react-dom
+```
 
-**Prerequisites:**  Node.js
+Import the component and its stylesheet in your app:
 
+```tsx
+import { SonicDesignSystem } from '@pallavikiragi/sonic-design-system';
+import '@pallavikiragi/sonic-design-system/style.css';
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+function App() {
+  return <SonicDesignSystem />;
+}
+```
+
+The package requires a browser environment. Audio playback uses the Web Audio API and may need to be started by a user gesture.
+
+## Build and publish the package
+
+```bash
+npm run build:package
+npm pack --dry-run
+npm login
+npm publish
+```
+
+`npm publish` publishes this scoped package publicly. A new version is required for each subsequent release.
+
+## Run the website locally
+
+```bash
+npm install
+npm run dev
+```
+
+Build the website with `npm run build`.

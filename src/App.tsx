@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
+import type { ReactElement } from 'react';
 import { 
   Play, ChevronDown, ChevronRight, Activity, Volume2, Info, Moon, Sun, 
   Layout, Monitor, Download, Sliders, Waves, Layers, Tag, Grid, Radio,
@@ -32,7 +33,7 @@ const WaveformSamplerPanel = lazy(() =>
 );
 import { applyThemeColors, clearThemeColorOverrides, ThemePreviewModal, THEME_PRESETS } from './components/ThemeCustomizerPanel';
 
-export default function App() {
+export default function App(): ReactElement {
   const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS'>('DLS');
   const [downloadingWavToken, setDownloadingWavToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
