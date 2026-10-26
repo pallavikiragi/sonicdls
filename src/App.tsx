@@ -1,43 +1,60 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
-import type { ReactElement } from 'react';
-import { 
-  Play, ChevronDown, ChevronRight, Activity, Volume2, Info, Moon, Sun, 
-  Layout, Monitor, Download, Sliders, Waves, Layers, Tag, Grid, Radio,
-  ArrowDown, PlusCircle, Palette
+import { useState, useEffect } from 'react';
+import {
+  Play, Pause, ChevronDown, ChevronRight, ChevronLeft, Activity, Volume2, Info, Moon, Sun,
+  Layout, LayoutGrid, Monitor, Download, Sliders, Waves, Layers, Tag, Grid, Radio,
+  Code, ArrowDown, Code2, Copy, Check, Plus, PlusCircle, Palette, MoreHorizontal, MoreVertical, Edit2, Folder, Sparkles,
+  Package, FileText
 } from 'lucide-react';
-import { 
-  audioEngine, 
-  BrandTokens, 
-  COMPONENT_DEFS, 
-  SEMANTIC_DEFS as DEFAULT_SEMANTIC_DEFS, 
+import {
+  audioEngine,
+  BrandTokens,
+  COMPONENT_DEFS,
+  SEMANTIC_DEFS as DEFAULT_SEMANTIC_DEFS,
   resolveNotes,
   InteractionType,
   CategoryType,
   INTERACTION_GROUPS,
   CATEGORY_GROUPS
 } from './lib/audio';
-const InfotainmentUI = lazy(() =>
-  import('./components/InfotainmentUI').then(module => ({ default: module.InfotainmentUI }))
-);
-const CreateTokenPanel = lazy(() =>
-  import('./components/CreateTokenPanel').then(module => ({ default: module.CreateTokenPanel }))
-);
-const AssignModal = lazy(() =>
-  import('./components/AssignModal').then(module => ({ default: module.AssignModal }))
-);
-const EditSemanticModal = lazy(() =>
-  import('./components/EditSemanticModal').then(module => ({ default: module.EditSemanticModal }))
-);
-const WaveformSamplerPanel = lazy(() =>
-  import('./components/WaveformSamplerPanel').then(module => ({ default: module.WaveformSamplerPanel }))
-);
+import { InfotainmentUI } from './components/InfotainmentUI';
+import { CreateTokenPanel } from './components/CreateTokenPanel';
+import { AssignModal } from './components/AssignModal';
+import { EditSemanticModal } from './components/EditSemanticModal';
+import { WaveformSamplerPanel } from './components/WaveformSamplerPanel';
+import { SdkPanel } from './components/SdkPanel';
+import { exportAllWavs, downloadTokenWav } from './lib/exportAudio';
 import { applyThemeColors, clearThemeColorOverrides, ThemePreviewModal, THEME_PRESETS } from './components/ThemeCustomizerPanel';
+import { SonicPresetsModal, SONIC_PRESETS, SonicPreset, applySonicPresetTheme } from './components/SonicPresetsModal';
 
-export default function App(): ReactElement {
-  const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS'>('DLS');
+function MiniWaveform({ isPlaying, barCount = 14 }: { isPlaying: boolean; barCount?: number }) {
+  const heights = [20, 45, 80, 55, 30, 70, 95, 60, 40, 85, 50, 35, 65, 25];
+  return (
+    <div className="flex items-center gap-[2.5px] h-6 px-1">
+      {heights.slice(0, barCount).map((h, i) => (
+        <span
+          key={i}
+          className={`w-[2px] rounded-full transition-all duration-150 ${
+            isPlaying
+              ? 'bg-app-accent animate-pulse'
+              : 'bg-app-text-muted/40'
+          }`}
+          style={{
+            height: isPlaying ? `${Math.max(20, (h * (0.6 + Math.random() * 0.8)))}%` : `${h}%`,
+            transitionDelay: `${i * 30}ms`
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function App() {
+  const [viewMode, setViewMode] = useState<'DLS' | 'CREATE' | 'INFOTAINMENT' | 'SETTINGS' | 'SDK' | 'PACKAGE'>('DLS');
+  const [copiedTokenToast, setCopiedTokenToast] = useState<string | null>(null);
   const [downloadingWavToken, setDownloadingWavToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
   const [showThemePreviewModal, setShowThemePreviewModal] = useState<boolean>(false);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   // Grouping mode for Tokens tab: By Interaction (new) vs By Category (classic DLS)
   const [groupBy, setGroupBy] = useState<'interaction' | 'category'>('interaction');
@@ -85,6 +102,30 @@ export default function App(): ReactElement {
   const [expanded, setExpanded] = useState({ primitive: true, semantic: true, component: true });
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isExportingWav, setIsExportingWav] = useState(false);
+  const [showSonicPresetsModal, setShowSonicPresetsModal] = useState(false);
+  const [activePresetName, setActivePresetName] = useState<string>(() => {
+    const saved = localStorage.getItem('sonic_dls_active_preset') || 'organic';
+    const found = SONIC_PRESETS.find(p => p.id === saved);
+    return found ? found.name : 'ORGANIC';
+  });
+
+  const handleApplySonicPreset = (preset: SonicPreset) => {
+    setBrand(preset.primitive);
+    setSemanticDefs(preset.semantics);
+    localStorage.setItem('sonic_dls_active_preset', preset.id);
+    applySonicPresetTheme(preset);
+    setActivePresetName(preset.name);
+  };
+
+  useEffect(() => {
+    // Initial mount: load saved sonic preset theme colors
+    const saved = localStorage.getItem('sonic_dls_active_preset') || 'organic';
+    const found = SONIC_PRESETS.find(p => p.id === saved);
+    if (found) {
+      applySonicPresetTheme(found);
+      setActivePresetName(found.name);
+    }
+  }, []);
 
   useEffect(() => {
     audioEngine.updateBrand(brand);
@@ -132,23 +173,28 @@ export default function App(): ReactElement {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    const saved = localStorage.getItem('sonic_dls_active_preset') || 'organic';
+    const found = SONIC_PRESETS.find(p => p.id === saved);
+    if (found) {
+      applySonicPresetTheme(found);
+    }
   }, [isDark]);
 
   const toggleTheme = () => {
     const nextDark = !isDark;
     setIsDark(nextDark);
-    
+
     // Link sonic theme to visual theme
     setBrand(b => {
       const newB = { ...b };
       if (nextDark) {
         // Darker Tone
-        newB.scale = 'A3 minor pentatonic'; 
+        newB.scale = 'A3 minor pentatonic';
         newB.warmth = 0.9;
         newB.decayUnit = 0.180;
       } else {
         // Warmer / Brighter Tone
-        newB.scale = 'C4 major pentatonic'; 
+        newB.scale = 'C4 major pentatonic';
         newB.warmth = 0.95;
         newB.decayUnit = 0.200;
       }
@@ -156,10 +202,38 @@ export default function App(): ReactElement {
     });
   };
 
+  const selectComponentToken = (compId: string, def: any) => {
+    const semDef = (semanticDefs as any)[def.semantic] || DEFAULT_SEMANTIC_DEFS.neutral;
+    const degrees = def.overrides?.arpeggio || semDef.degrees;
+    const resolvedNotes = resolveNotes(brand.scale, degrees);
+    let dur = brand.decayUnit * semDef.durMult;
+    if (def.overrides?.durMult) dur *= def.overrides.durMult;
+    if (compId === 'nav.arrived') dur = Math.min(dur, 0.8);
+    else dur = Math.min(dur, 0.5);
+
+    let vol = semDef.volOffset;
+    if (def.overrides?.volOffset !== undefined) vol += def.overrides.volOffset;
+    if (def.overrides?.volOverride !== undefined) vol = def.overrides.volOverride - brand.volumeBase;
+
+    setActiveToken({
+      component: compId,
+      semantic: def.semantic,
+      category: def.category,
+      interaction: def.interaction,
+      resolved: {
+        degrees,
+        notes: resolvedNotes.map(n => n.note),
+        freqs: resolvedNotes.map(n => n.freq),
+        dur,
+        vol
+      }
+    });
+  };
+
   const playComponent = async (compId: string) => {
     setPlayedTokens(prev => new Set(prev).add(compId));
     await audioEngine.init();
-    
+
     const allDefs = { ...COMPONENT_DEFS, ...customTokens };
     const def = allDefs[compId];
     if (!def) return;
@@ -169,7 +243,7 @@ export default function App(): ReactElement {
     const semDef = (semanticDefs as any)[def.semantic] || DEFAULT_SEMANTIC_DEFS.neutral;
     const degrees = def.overrides?.arpeggio || semDef.degrees;
     const resolvedNotes = resolveNotes(brand.scale, degrees);
-    
+
     let dur = brand.decayUnit * semDef.durMult;
     if (def.overrides?.durMult) dur *= def.overrides.durMult;
     if (compId === 'nav.arrived') dur = Math.min(dur, 0.8);
@@ -217,7 +291,7 @@ export default function App(): ReactElement {
     const allDefs = { ...COMPONENT_DEFS, ...customTokens };
     Object.entries(allDefs).forEach(([k, v]: [string, any]) => {
       const semDef = semanticDefs[v.semantic as keyof typeof DEFAULT_SEMANTIC_DEFS];
-      
+
       let dur = brand.decayUnit * semDef.durMult;
       if (v.overrides?.durMult) dur *= v.overrides.durMult;
       if (k === 'nav.arrived') dur = Math.min(dur, 0.8);
@@ -246,8 +320,8 @@ export default function App(): ReactElement {
 
     const exportData = {
       meta: { version: "1.0", mode: isDark ? 'dark' : 'light' },
-      primitive: { 
-        ...brand, 
+      primitive: {
+        ...brand,
         timbre: typeof brand.timbre === 'object' && brand.timbre !== null && brand.timbre.type === 'custom'
           ? {
               type: 'custom',
@@ -255,8 +329,8 @@ export default function App(): ReactElement {
               imag: Array.from(brand.timbre.imag)
             }
           : brand.timbre,
-        decayUnitMs: brand.decayUnit * 1000, 
-        attackMs: brand.attack * 1000 
+        decayUnitMs: brand.decayUnit * 1000,
+        attackMs: brand.attack * 1000
       },
       semantic: semanticExport,
       component: componentExport,
@@ -276,7 +350,6 @@ export default function App(): ReactElement {
   const handleExportWav = async () => {
     setIsExportingWav(true);
     try {
-      const { exportAllWavs } = await import('./lib/exportAudio');
       await exportAllWavs(brand);
     } catch (e) {
       console.error(e);
@@ -289,13 +362,24 @@ export default function App(): ReactElement {
   const handleDownloadTokenWav = async (tokenKey: string, tokenDef?: any) => {
     setDownloadingWavToken(tokenKey);
     try {
-      const { downloadTokenWav } = await import('./lib/exportAudio');
       await downloadTokenWav(tokenKey, brand, tokenDef);
     } catch (err) {
       console.error('Failed to download token WAV:', err);
     } finally {
       setDownloadingWavToken(null);
     }
+  };
+
+  const handleCopyTokenSnippet = (tokenKey: string) => {
+    const snippet = `import { SonicDLS } from '@studio/sonic-dls'
+import tokens from './sonic-dls-export.json'
+const dls = new SonicDLS(tokens)
+dls.play('${tokenKey}')`;
+    navigator.clipboard.writeText(snippet);
+    setCopiedTokenToast(tokenKey);
+    setTimeout(() => {
+      setCopiedTokenToast(null);
+    }, 1500);
   };
 
   const allDefsCombined = { ...COMPONENT_DEFS, ...customTokens };
@@ -364,110 +448,133 @@ export default function App(): ReactElement {
 
   return (
     <div className="relative h-screen flex flex-col font-sans bg-app-bg text-app-text overflow-hidden">
-      
+
       {/* BRAND EDITOR TOP BAR */}
-      <div className="h-auto border-b border-app-border bg-app-surface px-6 py-4 shrink-0 transition-colors">
-        <div className="flex justify-between items-center mb-6">
-          {/* LEFT: Logo Sonic DLS + Dark/Light Mode Toggle next to it */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-md bg-gradient-to-tr from-app-accent to-indigo-500 flex items-center justify-center text-white shadow-sm ring-1 ring-white/10">
-                <Activity size={18} />
+      <div className="h-auto border-b border-app-nav-border bg-app-nav-bg shrink-0 transition-colors">
+        <div className="flex justify-between items-center px-8 py-4.5 min-h-[72px]">
+          {/* LEFT: Brand Icon + Title + Active Preset Pill + Dark/Light toggle */}
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl border border-app-nav-border bg-app-nav-controls-bg flex items-center justify-center text-app-accent shadow-2xs shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12h3l3-7 4 14 3-7h7" />
+              </svg>
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <h1 className="text-[15px] font-bold tracking-tight text-app-text leading-tight">Sonic DLS</h1>
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-app-accent/15 text-app-accent border border-app-accent/25">
+                  <span className="w-1.5 h-1.5 rounded-full bg-app-accent" />
+                  {activePresetName}
+                </span>
               </div>
-              <div className="flex flex-col">
-                <h1 className="text-sm font-bold tracking-wider uppercase text-app-text leading-tight">Sonic DLS</h1>
-                <span className="text-[10px] text-app-text-muted font-mono leading-none">Sound Design System</span>
-              </div>
+              <span className="text-[11px] text-app-text-muted leading-tight font-normal">Sound Design System • Acoustic Primitives</span>
             </div>
 
-            {/* Light / Dark Mode Toggle right next to logo */}
+            {/* Light / Dark Mode Toggle button */}
             <button
               onClick={toggleTheme}
-              className="w-8 h-8 flex items-center justify-center rounded-md border border-app-border bg-app-surface-light/60 text-app-text-muted hover:text-app-text hover:border-app-text/40 transition-colors shadow-xs ml-1"
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-app-nav-border bg-app-nav-controls-bg text-app-text-muted hover:text-app-text transition-colors shadow-2xs ml-1"
               title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
               {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
           </div>
-          
-          {/* CENTER: Navigation [ Tokens ] [ Prototype ] [ Settings ] */}
-          <nav className="flex items-center bg-app-surface-light rounded-md p-1 border border-app-border shadow-xs">
+
+          {/* CENTER: Navigation [ TOKENS ] [ PROTOTYPE ] [ SETTINGS ] [ PACKAGE ] */}
+          <nav className="flex items-center bg-app-nav-controls-bg rounded-xl p-1.5 border border-app-nav-border shadow-2xs">
             <button
               onClick={() => setViewMode('DLS')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
-                viewMode === 'DLS' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs tracking-wider rounded-lg transition-all ${
+                viewMode === 'DLS'
+                  ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                  : 'text-app-text-muted hover:text-app-text font-medium'
               }`}
             >
-              <Monitor size={13} /> Tokens
+              <LayoutGrid size={13} /> TOKENS
             </button>
             <button
               onClick={() => setViewMode('INFOTAINMENT')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
-                viewMode === 'INFOTAINMENT' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs tracking-wider rounded-lg transition-all ${
+                viewMode === 'INFOTAINMENT'
+                  ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                  : 'text-app-text-muted hover:text-app-text font-medium'
               }`}
             >
-              <Layout size={13} /> Prototype
+              <Layout size={13} /> PROTOTYPE
             </button>
             <button
               onClick={() => setViewMode('SETTINGS')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${
-                viewMode === 'SETTINGS' ? 'bg-app-accent text-white font-semibold shadow-sm' : 'text-app-text-muted hover:text-app-text'
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs tracking-wider rounded-lg transition-all ${
+                viewMode === 'SETTINGS'
+                  ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                  : 'text-app-text-muted hover:text-app-text font-medium'
               }`}
             >
-              <Sliders size={13} /> Settings
+              <Sliders size={13} /> SETTINGS
+            </button>
+            <button
+              onClick={() => setViewMode('PACKAGE')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs tracking-wider rounded-lg transition-all ${
+                viewMode === 'PACKAGE' || viewMode === 'SDK'
+                  ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                  : 'text-app-text-muted hover:text-app-text font-medium'
+              }`}
+            >
+              <Package size={13} /> PACKAGE
             </button>
           </nav>
 
-          {/* RIGHTMOST: Themes Preview + Create Component CTA + Export Dropdown */}
-          <div className="flex items-center gap-2">
-            {/* Themes Previewer Button */}
+          {/* RIGHTMOST: Sonic Presets (22), + Create Token CTA & Export Dropdown */}
+          <div className="flex items-center gap-2.5">
+            {/* Sonic Character Presets CTA (22 Archetypes) */}
             <button
-              onClick={() => setShowThemePreviewModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md border border-app-border text-app-text-muted hover:text-app-text hover:bg-app-surface-light transition-colors shadow-xs"
-              title="Preview clean, modern visual styles and themes"
+              onClick={() => setShowSonicPresetsModal(true)}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-lg border border-app-nav-border bg-app-surface/90 text-app-text hover:bg-app-nav-controls-bg hover:border-app-accent shadow-2xs transition-all active:scale-95 group"
+              title="Sonic Character Presets (22 Industry Archetypes)"
             >
-              <Palette size={13} className="text-app-accent" />
-              <span>Themes</span>
+              <Sparkles size={14} className="text-app-accent group-hover:scale-110 transition-transform" />
+              <span>Sonic Presets</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-app-accent/15 text-app-accent font-semibold">22</span>
             </button>
 
-            {/* Create CTA Button (creates Component or Semantic token) */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  if (viewMode === 'DLS') {
-                    setShowCreateToken(true);
-                  } else {
-                    setViewMode('CREATE');
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md bg-app-accent hover:bg-blue-600 text-white shadow-sm transition-all active:scale-98"
-                title="Create a Component or Semantic Token"
-              >
-                <PlusCircle size={14} />
-                <span>Create Token</span>
-              </button>
-            </div>
+            {/* Create Token CTA */}
+            <button
+              onClick={() => {
+                if (viewMode === 'DLS') {
+                  setShowCreateToken(true);
+                } else {
+                  setViewMode('CREATE');
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-[#18181B] dark:bg-white text-white dark:text-[#18181B] hover:opacity-90 active:scale-95 shadow-sm transition-all"
+              title="Create a Component or Semantic Token"
+            >
+              <Plus size={14} strokeWidth={2.2} />
+              <span>Create Token</span>
+            </button>
 
             {/* Export Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium uppercase tracking-wider rounded-md border border-app-border text-app-text hover:bg-app-surface-light transition-colors shadow-xs"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-app-nav-border bg-app-surface/90 text-app-text hover:bg-app-nav-controls-bg shadow-2xs transition-all"
               >
-                <Download size={14} /> Export <ChevronDown size={14} />
+                <Download size={13} />
+                <span>Export</span>
+                <ChevronDown size={13} />
               </button>
               {showExportMenu && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-app-surface border border-app-border rounded-md shadow-xl z-50 overflow-hidden">
-                  <button 
+                <div className="absolute top-full right-0 mt-2 w-52 bg-app-surface border border-app-border rounded-xl shadow-xl z-50 overflow-hidden">
+                  <button
                     onClick={() => { handleExportJSON(); setShowExportMenu(false); }}
-                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light border-b border-app-border transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light border-b border-app-border transition-colors flex items-center gap-2 font-normal"
                   >
                     Export as JSON
                   </button>
-                  <button 
+                  <button
                     onClick={handleExportWav}
                     disabled={isExportingWav}
-                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light transition-colors flex items-center gap-2 disabled:opacity-50"
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light transition-colors flex items-center gap-2 disabled:opacity-50 font-normal"
                   >
                     {isExportingWav ? (
                       <>
@@ -478,62 +585,75 @@ export default function App(): ReactElement {
                       'Export as WAV (ZIP)'
                     )}
                   </button>
+                  <button
+                    onClick={() => { setShowSonicPresetsModal(true); setShowExportMenu(false); }}
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light transition-colors flex items-center gap-2 border-t border-app-border/40 text-app-accent font-medium"
+                  >
+                    <Sparkles size={13} />
+                    <span>Sonic Characters (22 Presets)</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowThemePreviewModal(true); setShowExportMenu(false); }}
+                    className="w-full text-left px-4 py-3 text-xs text-app-text hover:bg-app-surface-light transition-colors flex items-center gap-2 border-t border-app-border/40 font-medium"
+                  >
+                    <Palette size={13} />
+                    <span>Visual Themes</span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Sliders */}
-        <div className="flex justify-between w-full px-6 pb-4 border-t border-app-border pt-4">
-          
-          {/* Cluster 1: Scale */}
-          <div className="flex gap-4 pr-6 relative">
-            <div className="absolute -top-3 left-0 bg-app-surface px-2 text-[9px] uppercase tracking-widest text-app-text-muted font-bold">Scale</div>
-            <div className="flex flex-col gap-2">
-              <select 
-                value={brand.scale.split(' ')[0].replace(/[0-9]/g, '')} 
+        {/* PARAMETER CONTROLS BAR (Balanced, uncluttered typographic hierarchy) */}
+        <div className="px-8 py-3.5 border-t border-app-nav-border flex flex-wrap items-center justify-between gap-6 text-app-text bg-app-nav-bg/60">
+          {/* Cluster 1: SCALE */}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">SCALE</span>
+              <select
+                value={brand.scale.split(' ')[0].replace(/[0-9]/g, '')}
                 onChange={e => {
                   const parts = brand.scale.split(' ');
                   const octave = parts[0].replace(/[^0-9]/g, '');
                   const scaleType = parts.slice(1).join(' ');
                   setBrand(b => ({ ...b, scale: `${e.target.value}${octave} ${scaleType}` }));
-                }} 
-                className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none"
+                }}
+                className="h-8 px-2.5 bg-app-surface border border-app-border rounded-lg text-xs font-medium text-app-text outline-none focus:border-app-accent"
               >
                 {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(n => (
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
-              <span className="text-[10px] text-app-text-muted text-center">ROOT</span>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <select 
-                value={brand.scale.split(' ')[0].replace(/[^0-9]/g, '')} 
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">OCT</span>
+              <select
+                value={brand.scale.split(' ')[0].replace(/[^0-9]/g, '')}
                 onChange={e => {
                   const parts = brand.scale.split(' ');
                   const note = parts[0].replace(/[0-9]/g, '');
                   const scaleType = parts.slice(1).join(' ');
                   setBrand(b => ({ ...b, scale: `${note}${e.target.value} ${scaleType}` }));
-                }} 
-                className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none"
+                }}
+                className="h-8 px-2.5 bg-app-surface border border-app-border rounded-lg text-xs font-medium text-app-text outline-none focus:border-app-accent"
               >
                 {[2, 3, 4, 5, 6].map(o => (
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>
-              <span className="text-[10px] text-app-text-muted text-center">OCT</span>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <select 
-                value={brand.scale.split(' ').slice(1).join(' ')} 
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">TYPE</span>
+              <select
+                value={brand.scale.split(' ').slice(1).join(' ')}
                 onChange={e => {
                   const parts = brand.scale.split(' ');
                   setBrand(b => ({ ...b, scale: `${parts[0]} ${e.target.value}` }));
-                }} 
-                className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none"
+                }}
+                className="h-8 px-3 bg-app-surface border border-app-border rounded-lg text-xs font-medium text-app-text outline-none focus:border-app-accent min-w-[150px]"
               >
                 <option value="major pentatonic">Major Pentatonic</option>
                 <option value="minor pentatonic">Minor Pentatonic</option>
@@ -542,27 +662,26 @@ export default function App(): ReactElement {
                 <option value="dorian">Dorian</option>
                 <option value="lydian">Lydian</option>
               </select>
-              <span className="text-[10px] text-app-text-muted text-center">TYPE</span>
             </div>
           </div>
 
-          <div className="w-[1px] bg-app-border mx-2"></div>
+          <div className="hidden lg:block h-9 w-px bg-app-border"></div>
 
-          {/* Cluster 2: Timbre */}
-          <div className="flex gap-4 px-6 relative">
-            <div className="absolute -top-3 left-6 bg-app-surface px-2 text-[9px] uppercase tracking-widest text-app-text-muted font-bold">Timbre</div>
-            <div className="flex flex-col gap-2">
+          {/* Cluster 2: TIMBRE */}
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">TIMBRE</span>
               <div className="flex items-center gap-1.5">
-                <select 
-                  value={typeof brand.timbre === 'object' ? 'custom' : brand.timbre} 
+                <select
+                  value={typeof brand.timbre === 'object' ? 'custom' : brand.timbre}
                   onChange={e => {
                     if (e.target.value === 'custom') {
                       setViewMode('SETTINGS');
                     } else {
                       setBrand(b => ({ ...b, timbre: e.target.value as any }));
                     }
-                  }} 
-                  className="bg-app-surface-light border border-app-border text-xs p-1.5 rounded accent-app-accent outline-none capitalize"
+                  }}
+                  className="h-8 px-2.5 bg-app-surface border border-app-border rounded-lg text-xs font-medium text-app-text outline-none capitalize focus:border-app-accent"
                 >
                   <option value="sine">Sine</option>
                   <option value="triangle">Triangle</option>
@@ -574,61 +693,170 @@ export default function App(): ReactElement {
                 </select>
                 <button
                   onClick={() => setViewMode('SETTINGS')}
-                  className={`text-[10px] px-2 py-1.5 rounded border transition-colors whitespace-nowrap font-medium ${
-                    typeof brand.timbre === 'object'
-                      ? 'bg-app-accent/15 border-app-accent text-app-accent'
-                      : 'bg-app-surface-light border-app-border text-app-text-muted hover:text-app-text'
-                  }`}
-                  title="Open Waveform Sampler Panel"
+                  className="h-8 px-2.5 rounded-lg border border-app-border bg-app-surface-light text-app-text text-xs font-medium hover:border-app-accent transition-colors"
                 >
                   Sampler
                 </button>
               </div>
-              <span className="text-[10px] text-app-text-muted text-center">
-                {typeof brand.timbre === 'object' ? 'PERIODIC WAVE (32 HARMONICS)' : 'WAVE'}
-              </span>
             </div>
 
-            <div className="flex flex-col gap-2 w-[100px]">
-              <div className="flex justify-between items-center px-1">
-                <input type="range" min="0" max="1" step="0.01" value={brand.warmth} onChange={e => setBrand(b => ({ ...b, warmth: parseFloat(e.target.value) }))} className="accent-app-accent w-full" />
+            {/* WAVE with editable numeric input */}
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">WAVE</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.005"
+                    value={parseFloat(brand.attack.toFixed(3))}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setBrand(b => ({ ...b, attack: Math.max(0, Math.min(1, v)) }));
+                    }}
+                    className="w-13 h-5 px-1 text-[11px] font-mono font-medium text-right bg-app-surface border border-app-border rounded text-app-text focus:border-app-accent outline-none"
+                  />
+                  <span className="text-[10px] text-app-text-muted font-mono">s</span>
+                </div>
               </div>
-              <span className="text-[10px] text-app-text-muted text-center mt-1">WARMTH ({brand.warmth.toFixed(2)})</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.005"
+                value={brand.attack}
+                onChange={e => setBrand(b => ({ ...b, attack: parseFloat(e.target.value) }))}
+                className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
+              />
+            </div>
+
+            {/* WARMTH with editable numeric input */}
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">WARMTH</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={parseFloat(brand.warmth.toFixed(2))}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setBrand(b => ({ ...b, warmth: Math.max(0, Math.min(1, v)) }));
+                  }}
+                  className="w-13 h-5 px-1 text-[11px] font-mono font-medium text-right bg-app-surface border border-app-border rounded text-app-text focus:border-app-accent outline-none"
+                />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={brand.warmth}
+                onChange={e => setBrand(b => ({ ...b, warmth: parseFloat(e.target.value) }))}
+                className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
+              />
             </div>
           </div>
 
-          <div className="w-[1px] bg-app-border mx-2"></div>
+          <div className="hidden lg:block h-9 w-px bg-app-border"></div>
 
-          {/* Cluster 3: Envelope */}
-          <div className="flex gap-4 pl-6 relative">
-            <div className="absolute -top-3 left-6 bg-app-surface px-2 text-[9px] uppercase tracking-widest text-app-text-muted font-bold">Envelope</div>
-            
-            <div className="flex flex-col gap-2 w-[100px]">
-              <div className="flex justify-between items-center px-1">
-                <input type="range" min="0.05" max="0.3" step="0.01" value={brand.decayUnit} onChange={e => setBrand(b => ({ ...b, decayUnit: parseFloat(e.target.value) }))} className="accent-app-accent w-full" />
+          {/* Cluster 3: ENVELOPE */}
+          <div className="flex items-center gap-4">
+            {/* DECAY with editable numeric input */}
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">DECAY</span>
+                <div className="flex items-center gap-0.5">
+                  <input
+                    type="number"
+                    min="50"
+                    max="300"
+                    step="5"
+                    value={Math.round(brand.decayUnit * 1000)}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setBrand(b => ({ ...b, decayUnit: Math.max(0.05, Math.min(0.3, v / 1000)) }));
+                    }}
+                    className="w-12 h-5 px-1 text-[11px] font-mono font-medium text-right bg-app-surface border border-app-border rounded text-app-text focus:border-app-accent outline-none"
+                  />
+                  <span className="text-[10px] text-app-text-muted font-mono">ms</span>
+                </div>
               </div>
-              <span className="text-[10px] text-app-text-muted text-center mt-1">DECAY ({(brand.decayUnit * 1000).toFixed(0)}ms)</span>
+              <input
+                type="range"
+                min="0.05"
+                max="0.3"
+                step="0.005"
+                value={brand.decayUnit}
+                onChange={e => setBrand(b => ({ ...b, decayUnit: parseFloat(e.target.value) }))}
+                className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
+              />
             </div>
 
-            <div className="flex flex-col gap-2 w-[100px]">
-              <div className="flex justify-between items-center px-1">
-                <input type="range" min="0" max="0.5" step="0.01" value={brand.reverbAmount} onChange={e => setBrand(b => ({ ...b, reverbAmount: parseFloat(e.target.value) }))} className="accent-app-accent w-full" />
+            {/* REVERB with editable numeric input */}
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">REVERB</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="0.5"
+                  step="0.01"
+                  value={parseFloat(brand.reverbAmount.toFixed(2))}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setBrand(b => ({ ...b, reverbAmount: Math.max(0, Math.min(0.5, v)) }));
+                  }}
+                  className="w-13 h-5 px-1 text-[11px] font-mono font-medium text-right bg-app-surface border border-app-border rounded text-app-text focus:border-app-accent outline-none"
+                />
               </div>
-              <span className="text-[10px] text-app-text-muted text-center mt-1">REVERB ({brand.reverbAmount.toFixed(2)})</span>
+              <input
+                type="range"
+                min="0"
+                max="0.5"
+                step="0.01"
+                value={brand.reverbAmount}
+                onChange={e => setBrand(b => ({ ...b, reverbAmount: parseFloat(e.target.value) }))}
+                className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
+              />
             </div>
 
-            <div className="flex flex-col gap-2 w-[100px]">
-              <div className="flex justify-between items-center px-1">
-                <input type="range" min="-30" max="0" step="1" value={brand.volumeBase} onChange={e => setBrand(b => ({ ...b, volumeBase: parseInt(e.target.value) }))} className="accent-app-accent w-full" />
+            {/* VOL with editable numeric input */}
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-app-text-muted font-medium">VOL</span>
+                <div className="flex items-center gap-0.5">
+                  <input
+                    type="number"
+                    min="-30"
+                    max="0"
+                    step="1"
+                    value={brand.volumeBase}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setBrand(b => ({ ...b, volumeBase: Math.max(-30, Math.min(0, v)) }));
+                    }}
+                    className="w-12 h-5 px-1 text-[11px] font-mono font-medium text-right bg-app-surface border border-app-border rounded text-app-text focus:border-app-accent outline-none"
+                  />
+                  <span className="text-[10px] text-app-text-muted font-mono">dB</span>
+                </div>
               </div>
-              <span className="text-[10px] text-app-text-muted text-center mt-1">VOL ({brand.volumeBase}dB)</span>
+              <input
+                type="range"
+                min="-30"
+                max="0"
+                step="1"
+                value={brand.volumeBase}
+                onChange={e => setBrand(b => ({ ...b, volumeBase: parseInt(e.target.value) }))}
+                className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
+              />
             </div>
           </div>
-
         </div>
       </div>
 
-      <Suspense fallback={null}>
       {viewMode === 'CREATE' ? (
         <CreateTokenPanel
           isFullView
@@ -648,10 +876,10 @@ export default function App(): ReactElement {
           onAddSemantic={handleAddSemanticToken}
         />
       ) : viewMode === 'INFOTAINMENT' ? (
-        <InfotainmentUI 
-          brand={brand} 
-          playComponent={playComponent} 
-          assignments={assignments} 
+        <InfotainmentUI
+          brand={brand}
+          playComponent={playComponent}
+          assignments={assignments}
           allTokens={Object.keys(allDefsCombined)}
           onUpdateAssignment={(elementName, token) => {
             setAssignments(prev => ({ ...prev, [elementName]: token }));
@@ -664,574 +892,659 @@ export default function App(): ReactElement {
           onUpdateBrandTimbre={(newTimbre) => setBrand(b => ({ ...b, timbre: newTimbre }))}
           onNavigateToExplorer={() => setViewMode('DLS')}
         />
+      ) : (viewMode === 'PACKAGE' || viewMode === 'SDK') ? (
+        <SdkPanel
+          brand={brand}
+          customTokens={customTokens}
+          onPlayToken={(id) => playComponent(id)}
+          onNavigateToSettings={() => setViewMode('SETTINGS')}
+        />
       ) : (
         <div className="flex-1 flex overflow-hidden">
 
-        
-        {/* LEFT COL: HIERARCHY EXPLORER */}
-        <div className="w-[300px] border-r border-app-border bg-app-surface overflow-y-auto">
-          <div className="p-4 border-b border-app-border">
-            <h2 className="text-[10px] uppercase tracking-widest text-app-text-muted font-bold">Token Hierarchy</h2>
-          </div>
+          {/* LEFT COL: TOKEN HIERARCHY */}
+          <div className="w-[280px] xl:w-[300px] border-r border-app-border bg-app-surface flex flex-col justify-between overflow-y-auto shrink-0 relative">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between pb-1">
+                <h2 className="text-xs uppercase tracking-wider font-semibold text-app-text">
+                  TOKEN HIERARCHY
+                </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-app-token-bg border border-app-token-border text-app-text-muted font-medium">
+                  3 Layers
+                </span>
+              </div>
 
-          <div className="p-2">
-            {/* Primitive */}
-            <div>
-              <button 
-                className="w-full flex items-center justify-between p-2 text-xs uppercase tracking-wider font-medium text-app-text hover:bg-app-surface-light rounded transition-colors"
-                onClick={() => setExpanded(e => ({ ...e, primitive: !e.primitive }))}
-              >
-                <span>1. Primitive</span>
-                {expanded.primitive ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              {expanded.primitive && (
-                <div className="pl-4 pr-2 py-2 space-y-2">
-                  {Object.entries(brand).map(([k, v]: [string, any]) => (
-                    <div key={k} className="flex justify-between text-[11px] font-mono text-app-text-muted border-l border-app-border pl-2">
-                      <span>brand.{k}</span>
-                      <span className="text-app-accent">
-                        {typeof v === 'number' 
-                          ? v.toFixed(2) 
-                          : typeof v === 'object' && v !== null && v.type === 'custom'
-                            ? 'custom (32 harmonics)' 
-                            : String(v)}
+              {/* Breaker line */}
+              <div className="h-px bg-app-border/80 w-full" />
+
+              {/* 1. PRIMITIVE */}
+              <div className="space-y-2.5">
+                <button
+                  className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-app-text hover:text-app-accent transition-colors"
+                  onClick={() => setExpanded(e => ({ ...e, primitive: !e.primitive }))}
+                >
+                  <span className="font-semibold">1. PRIMITIVE</span>
+                  {expanded.primitive ? <ChevronDown size={14} className="text-app-text-muted" /> : <ChevronRight size={14} className="text-app-text-muted" />}
+                </button>
+                {expanded.primitive && (
+                  <div className="space-y-2 pt-1 pl-1 text-xs font-mono">
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.scale</span>
+                      <span className="text-app-text truncate max-w-[130px] text-right font-sans font-medium">
+                        {brand.scale.split(' ')[0]}; {brand.scale.split(' ').slice(1).join(' ')}
                       </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.timbre</span>
+                      <span className="text-app-text font-sans font-medium capitalize">
+                        {typeof brand.timbre === 'object' ? 'custom' : brand.timbre}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.decayUnit</span>
+                      <span className="text-app-text font-sans font-normal">{brand.decayUnit.toFixed(2)}s</span>
+                    </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.warmth</span>
+                      <span className="text-app-text font-sans font-normal">{brand.warmth.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.volumeBase</span>
+                      <span className="text-app-text font-sans font-normal">{brand.volumeBase.toFixed(2)}dB</span>
+                    </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.reverbAmount</span>
+                      <span className="text-app-text font-sans font-normal">{brand.reverbAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-app-text-muted">
+                      <span>brand.attack</span>
+                      <span className="text-app-text font-sans font-normal">{brand.attack.toFixed(3)}s</span>
+                    </div>
 
-            {/* Semantic */}
-            <div className="mt-2">
-              <button 
-                className="w-full flex items-center justify-between p-2 text-xs uppercase tracking-wider font-medium text-app-text hover:bg-app-surface-light rounded transition-colors"
-                onClick={() => setExpanded(e => ({ ...e, semantic: !e.semantic }))}
-              >
-                <span>2. Semantic</span>
-                {expanded.semantic ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              {expanded.semantic && (
-                <div className="pl-4 pr-2 py-2 space-y-3">
-                  {Object.entries(semanticDefs).map(([k, v]: [string, any]) => {
-                    const degrees = v.degrees.join(', ');
-                    const dur = Math.round(brand.decayUnit * v.durMult * 1000);
-                    return (
-                      <div key={k} className="border-l border-app-border pl-2">
-                        <div className="text-[11px] font-mono text-app-text">semantic.{k}</div>
-                        <div className="text-[10px] text-app-text-muted mt-1">
-                          deg: [{degrees}] • {dur}ms • {v.volOffset > 0 ? '+' : ''}{v.volOffset}dB
+                    <button
+                      onClick={() => setShowSonicPresetsModal(true)}
+                      className="mt-3.5 w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium border border-app-border rounded-xl bg-app-surface hover:bg-app-surface-light hover:border-app-accent text-app-text transition-all shadow-2xs group"
+                    >
+                      <Sparkles size={13} className="text-app-accent group-hover:scale-110 transition-transform" />
+                      <span>22 Sonic Character Presets</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Breaker line */}
+              <div className="h-px bg-app-border/80 w-full" />
+
+              {/* 2. SEMANTIC */}
+              <div className="space-y-2.5">
+                <button
+                  className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-app-text hover:text-app-accent transition-colors"
+                  onClick={() => setExpanded(e => ({ ...e, semantic: !e.semantic }))}
+                >
+                  <span className="font-semibold">2. SEMANTIC</span>
+                  {expanded.semantic ? <ChevronDown size={14} className="text-app-text-muted" /> : <ChevronRight size={14} className="text-app-text-muted" />}
+                </button>
+                {expanded.semantic && (
+                  <div className="space-y-2 pt-1 pl-1 text-xs font-mono">
+                    {Object.entries(semanticDefs).map(([k, v]: [string, any]) => {
+                      const dur = Math.round(brand.decayUnit * v.durMult * 1000);
+                      return (
+                        <div key={k} className="flex items-center justify-between text-app-text-muted hover:text-app-text transition-colors">
+                          <span className="truncate font-normal">
+                            semantic.{k}
+                          </span>
+                          <span className="text-[11px] text-app-text-muted/80 font-mono shrink-0 ml-1 font-normal">
+                            [{v.degrees[0]}...{dur}ms, {v.volOffset > 0 ? `+${v.volOffset}` : v.volOffset}dB]
+                          </span>
                         </div>
-                      </div>
-                    );
-                  })}
-                  <button 
-                    onClick={() => setShowEditSemantic(true)}
-                    className="mt-2 w-full p-1.5 border border-dashed border-app-border rounded text-[10px] text-app-text-muted hover:text-app-text hover:border-app-text transition-colors uppercase tracking-wider"
-                  >
-                    Edit Semantics
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Component */}
-            <div className="mt-2">
-              <button 
-                className="w-full flex items-center justify-between p-2 text-xs uppercase tracking-wider font-medium text-app-text hover:bg-app-surface-light rounded transition-colors"
-                onClick={() => setExpanded(e => ({ ...e, component: !e.component }))}
-              >
-                <div className="flex items-center gap-1.5 truncate">
-                  <span>3. Component</span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-app-surface-light border border-app-border text-app-accent font-mono">
-                    {groupBy === 'interaction' ? 'Interaction' : 'Category'}
-                  </span>
-                </div>
-                {expanded.component ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              {expanded.component && (
-                <div className="pl-2 pr-1 py-2 space-y-3">
-                  {activeGroups.map(grp => (
-                    <div key={grp.key} className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-app-text-muted px-2 py-1 bg-app-surface-light/60 rounded border border-app-border/40">
-                        <span className="truncate">{grp.label}</span>
-                        <span className="font-mono text-[9px] px-1.5 bg-app-surface rounded text-app-accent border border-app-border">
-                          {grp.tokens.length}
-                        </span>
-                      </div>
-                      <div className="pl-2 space-y-1">
-                        {grp.tokens.map(([k, v]: [string, any]) => {
-                          const isSelected = activeToken?.component === k;
-                          const isPlaying = playingComponents.has(k);
-                          return (
-                            <div
-                              key={k}
-                              className={`w-full text-left p-1.5 rounded transition-colors flex items-center justify-between group/side ${
-                                isSelected 
-                                  ? 'bg-app-accent/15 text-app-accent border-l-2 border-app-accent pl-2' 
-                                  : customTokens[k]
-                                    ? 'hover:bg-app-surface-light text-app-text-muted hover:text-app-text border-l-2 border-[#A78BFA] pl-2'
-                                    : 'hover:bg-app-surface-light text-app-text-muted hover:text-app-text border-l border-app-border pl-2'
-                              }`}
-                            >
-                              <button
-                                onClick={() => playComponent(k)}
-                                className="truncate text-left flex-1"
-                                title={`Select & play ${k}`}
-                              >
-                                <div className="text-[11px] font-mono leading-tight truncate">{k}</div>
-                                <div className="text-[9px] text-app-text-muted opacity-80 mt-0.5 truncate">
-                                  → semantic.{v.semantic}
-                                </div>
-                              </button>
-
-                              <div className="flex items-center shrink-0 ml-1.5" onClick={e => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  onClick={() => playComponent(k)}
-                                  title={`Play ${k}`}
-                                  className={`p-1 rounded transition-colors ${
-                                    isPlaying
-                                      ? 'bg-app-accent text-white shadow-sm ring-1 ring-app-accent/50'
-                                      : 'text-app-text-muted hover:text-white hover:bg-app-accent'
-                                  }`}
-                                >
-                                  <Play size={10} className={isPlaying ? 'fill-current animate-pulse' : ''} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Assignments */}
-            {Object.keys(assignments).length > 0 && (
-              <div className="mt-4 pt-4 border-t border-app-border">
-                <div className="p-2 text-[10px] uppercase tracking-widest text-app-text-muted font-bold">Assignments</div>
-                <div className="pl-2 pr-2 py-2 space-y-2">
-                  {Object.entries(assignments).map(([element, token]: [string, any]) => (
-                    <div key={element} className="text-[11px] flex justify-between gap-2 border-l border-app-border pl-2">
-                      <span className="text-app-text truncate">{element}</span>
-                      <span className="text-app-text-muted font-mono shrink-0">→ {token}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button 
-              onClick={() => setViewMode('CREATE')}
-              className="mt-6 w-full p-2 border border-dashed border-app-border rounded text-xs text-app-text-muted hover:text-app-accent hover:border-app-accent transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5"
-            >
-              <PlusCircle size={13} />
-              <span>+ Create Token (Semantic or Component)</span>
-            </button>
-
-          </div>
-        </div>
-
-        {/* MID COL: PLAYGROUND */}
-        <div className="flex-1 overflow-y-auto bg-app-bg p-8">
-          <div className="max-w-4xl mx-auto space-y-10">
-
-            {/* TOP BAR OF TOKENS TAB: VIEW TOGGLE [ By Interaction ] [ By Category ] */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-app-border">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-app-text">
-                    Sonic DLS Tokens
-                  </h2>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-app-surface-light border border-app-border text-app-text-muted font-semibold">
-                    {Object.keys(allDefsCombined).length} Tokens
-                  </span>
-                </div>
-                <p className="text-xs text-app-text-muted mt-1">
-                  {groupBy === 'interaction' 
-                    ? 'Interaction structure (per designer feedback): Input, Navigation, Confirmation, Error, Alert, Ambient, Voice.'
-                    : 'Classic DLS category structure: UI Interactions, Navigation, Alerts, Voice Assistant, Media & Comms.'}
-                </p>
+                      );
+                    })}
+                    <button
+                      onClick={() => setShowEditSemantic(true)}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-app-border rounded-lg bg-app-surface hover:bg-app-surface-light text-app-text transition-colors shadow-2xs"
+                    >
+                      <Edit2 size={13} />
+                      <span>Edit Semantics</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Toggle Buttons: [ By Interaction ]  [ By Category ] */}
-              <div className="flex items-center bg-app-surface-light p-1 rounded-md border border-app-border shadow-inner shrink-0">
+              {/* Breaker line */}
+              <div className="h-px bg-app-border/80 w-full" />
+
+              {/* 3. COMPONENT */}
+              <div className="space-y-2.5">
                 <button
-                  onClick={() => setGroupBy('interaction')}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-all ${
-                    groupBy === 'interaction'
-                      ? 'bg-app-accent text-white shadow-sm'
-                      : 'text-app-text-muted hover:text-app-text'
-                  }`}
+                  className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-app-text hover:text-app-accent transition-colors"
+                  onClick={() => setExpanded(e => ({ ...e, component: !e.component }))}
                 >
-                  <Tag size={13} /> By Interaction
-                </button>
-                <button
-                  onClick={() => setGroupBy('category')}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider rounded transition-all ${
-                    groupBy === 'category'
-                      ? 'bg-app-accent text-white shadow-sm'
-                      : 'text-app-text-muted hover:text-app-text'
-                  }`}
-                >
-                  <Grid size={13} /> By Category
-                </button>
-              </div>
-            </div>
-
-            {/* TOKEN GROUPS ACCORDING TO ACTIVE TOGGLE */}
-            {activeGroups.map(grp => (
-              <div key={grp.key} id={`group-${grp.key}`} className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-app-border pb-2">
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <h3 className="text-xs uppercase tracking-widest text-app-text font-bold">
-                      {grp.label}
-                    </h3>
-                    <span className="text-xs text-app-text-muted font-normal">
-                      — {grp.desc}
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">3. COMPONENT</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-app-surface-light border border-app-border text-app-text-muted font-mono font-medium">
+                      INTERACTION
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono text-app-text-muted bg-app-surface-light px-2 py-0.5 rounded border border-app-border shrink-0">
-                    {grp.tokens.length} {grp.tokens.length === 1 ? 'token' : 'tokens'}
-                  </span>
+                  {expanded.component ? <ChevronDown size={14} className="text-app-text-muted" /> : <ChevronRight size={14} className="text-app-text-muted" />}
+                </button>
+                {expanded.component && (
+                  <div className="space-y-2 pt-1 pl-1 text-xs font-mono">
+                    {['ui.knob.rotate', 'ui.toggle.on', 'ui.toggle.off'].map(tokenName => {
+                      const def = allDefsCombined[tokenName as keyof typeof allDefsCombined];
+                      const semName = def ? def.semantic : 'neutral';
+                      return (
+                        <div
+                          key={tokenName}
+                          onClick={() => {
+                            if (def) selectComponentToken(tokenName, def);
+                            playComponent(tokenName);
+                          }}
+                          className="flex items-center justify-between text-app-text-muted hover:text-app-text cursor-pointer transition-colors"
+                        >
+                          <span className="truncate font-normal">
+                            {tokenName}
+                          </span>
+                          <span className="text-[11px] text-app-text-muted/80 font-mono shrink-0 ml-1 font-normal">
+                            semantic.{semName}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Breaker line above Add Category */}
+            <div className="px-6">
+              <div className="h-px bg-app-border/80 w-full" />
+            </div>
+
+            {/* Bottom + Add Category & decorative contours */}
+            <div className="p-6 relative">
+              <button
+                onClick={() => setShowCreateToken(true)}
+                className="flex items-center justify-center gap-2.5 w-full text-xs font-medium py-3 px-4 rounded-xl bg-black text-white hover:bg-neutral-800 active:scale-98 transition-all shadow-md relative z-10"
+              >
+                <FileText size={15} className="text-white" />
+                <span>Add Category</span>
+              </button>
+
+              {/* Subtle decorative wave curves */}
+              <svg className="absolute bottom-0 left-0 w-44 h-28 opacity-15 pointer-events-none text-app-text" viewBox="0 0 100 80" fill="none">
+                <path d="M0 40 Q 25 20, 50 40 T 100 40" stroke="currentColor" strokeWidth="0.8" />
+                <path d="M0 50 Q 25 30, 50 50 T 100 50" stroke="currentColor" strokeWidth="0.8" />
+                <path d="M0 60 Q 25 40, 50 60 T 100 60" stroke="currentColor" strokeWidth="0.8" />
+                <path d="M0 70 Q 25 50, 50 70 T 100 70" stroke="currentColor" strokeWidth="0.8" />
+              </svg>
+            </div>
+          </div>
+
+          {/* MID COL: TOKENS GRID (Matches image.png) */}
+          <div className="flex-1 overflow-y-auto bg-app-bg p-8">
+            <div className="max-w-6xl mx-auto space-y-10">
+
+              {/* Header: Title + Badge + Subtitle + By Interaction / By Category switch */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-app-border">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-xl font-bold tracking-tight text-app-text">
+                      Sonic DLS Tokens
+                    </h2>
+                    <span className="text-xs font-mono px-3 py-1 rounded-full bg-app-token-bg border border-app-token-border text-app-text-muted font-medium">
+                      {Object.keys(allDefsCombined).length} tokens
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-app-text-muted mt-1.5 font-normal">
+                    {groupBy === 'interaction'
+                      ? 'Interaction structure (per designer feedback): Input, Navigation, Confirmation, Error, Alert, Ambient, Voice.'
+                      : 'Classic DLS category structure: UI Interactions, Navigation, Alerts, Voice Assistant, Media & Comms.'}
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  {grp.tokens.map(([k, v]: [string, any]) => {
-                    const isSafety = grp.key === 'Alert' || v.category === 'Alerts';
-                    const isCustom = !!customTokens[k];
-                    const isActive = activeToken?.component === k;
-                    const isPlaying = playingComponents.has(k);
-                    const hasPlayed = playedTokens.has(k);
+                {/* View Toggle Pill */}
+                <div className="flex items-center bg-app-nav-controls-bg p-1 rounded-xl border border-app-nav-border shrink-0 shadow-2xs">
+                  <button
+                    onClick={() => setGroupBy('interaction')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs rounded-lg transition-all ${
+                      groupBy === 'interaction'
+                        ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                        : 'text-app-text-muted hover:text-app-text font-medium'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${groupBy === 'interaction' ? 'bg-app-accent' : 'bg-transparent'}`} />
+                    By Interaction
+                  </button>
+                  <button
+                    onClick={() => setGroupBy('category')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs rounded-lg transition-all ${
+                      groupBy === 'category'
+                        ? 'bg-app-surface text-app-text shadow-xs font-semibold'
+                        : 'text-app-text-muted hover:text-app-text font-medium'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${groupBy === 'category' ? 'bg-app-accent' : 'bg-transparent'}`} />
+                    By Category
+                  </button>
+                </div>
+              </div>
 
-                    const semDef = semanticDefs[v.semantic as keyof typeof DEFAULT_SEMANTIC_DEFS];
-                    const resolvedNotes = resolveNotes(brand.scale, v.overrides?.arpeggio || semDef.degrees);
-                    const freqStr = resolvedNotes[0] ? `${Math.round(resolvedNotes[0].freq)} Hz` : '';
-                    let dur = brand.decayUnit * semDef.durMult;
-                    if (v.overrides?.durMult) dur *= v.overrides.durMult;
-                    if (k === 'nav.arrived') dur = Math.min(dur, 0.8);
-                    else dur = Math.min(dur, 0.5);
-                    const badgeText = `${freqStr} · ${Math.round(dur * 1000)}ms`;
+              {/* Groups */}
+              {activeGroups.map(grp => (
+                <div key={grp.key} id={`group-${grp.key}`} className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-app-border pb-2.5">
+                    <div className="flex items-baseline gap-2.5">
+                      <h3 className="text-sm font-semibold tracking-normal text-app-text">
+                        {grp.label}
+                      </h3>
+                      <span className="text-xs text-app-text-muted font-normal">
+                        — {grp.desc}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono text-app-text-muted bg-app-token-bg px-3 py-1 rounded-full border border-app-token-border font-medium">
+                      {grp.tokens.length} {grp.tokens.length === 1 ? 'token' : 'tokens'}
+                    </span>
+                  </div>
 
-                    return (
-                      <div key={k} className="relative group">
+                  {/* Rectangular compact token cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                    {grp.tokens.map(([k, v]: [string, any]) => {
+                      const isSelected = activeToken?.component === k;
+                      const isPlaying = playingComponents.has(k);
+
+                      return (
                         <div
-                          onClick={() => playComponent(k)}
-                          className={`w-full relative flex flex-col p-4 text-left border rounded-[4px] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)] ${
-                            isSafety ? 'border-l-2 border-l-[#F5A623]' : isCustom ? 'border-l-2 border-l-[#A78BFA]' : ''
-                          } ${
-                            isPlaying
-                              ? isSafety
-                                ? 'bg-[#F59E0B20] border-app-amber shadow-[0_0_15px_rgba(245,158,11,0.3)] ring-1 ring-app-amber/50'
-                                : 'bg-[#3B82F620] border-app-accent shadow-[0_0_15px_rgba(59,130,246,0.3)] ring-1 ring-app-accent/50'
-                              : isActive
-                                ? isSafety ? 'bg-[#F59E0B1A] border-app-amber shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-[#3B82F61A] border-app-accent shadow-[0_0_15px_rgba(59,130,246,0.2)]'
-                                : 'bg-app-surface border-app-border hover:border-app-text-muted'
+                          key={k}
+                          onClick={() => {
+                            selectComponentToken(k, v);
+                            playComponent(k);
+                          }}
+                          className={`relative flex flex-col justify-between p-3.5 rounded-xl border transition-all duration-200 cursor-pointer min-h-[112px] shadow-2xs hover:shadow-md ${
+                            isSelected
+                              ? 'border-app-accent ring-2 ring-app-accent/30 shadow-sm bg-app-token-bg-hover'
+                              : 'border-app-token-border hover:border-app-accent/50 bg-app-token-bg hover:bg-app-token-bg-hover'
                           }`}
                         >
-                          {hasPlayed && !isPlaying && (
-                            <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#3DD68C]" title="Previously played"></div>
-                          )}
-                          
-                          {/* Top Row: Component Token Name & Dedicated Play / Pause Buttons */}
-                          <div className="flex items-start justify-between gap-2 mb-2 w-full">
-                            <span className={`text-xs font-mono font-medium truncate flex-1 ${
-                              isSafety ? 'text-app-amber' : isActive || isPlaying ? 'text-app-accent' : 'text-app-text'
-                            }`}>
+                          {/* Top: Name + Action Icons (Copy Code, Download WAV, Options) */}
+                          <div className="flex items-center justify-between gap-1.5 w-full">
+                            <span className="text-xs sm:text-sm font-semibold text-app-text truncate flex-1" title={k}>
                               {k}
                             </span>
 
-                            {/* Component Play, Pause, WAV Download, and Copy Snippet Buttons */}
-                            <div 
-                              className="flex items-center gap-0.5 shrink-0 bg-app-surface-light p-0.5 rounded border border-app-border shadow-xs"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {/* [ ▶ ] Play */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {/* Copy Code Icon */}
                               <button
                                 type="button"
-                                onClick={() => playComponent(k)}
-                                title={`Play ${k}`}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
-                                  isPlaying
-                                    ? isSafety
-                                      ? 'bg-app-amber text-black font-bold shadow-xs ring-1 ring-app-amber animate-pulse'
-                                      : 'bg-app-accent text-white font-bold shadow-xs ring-1 ring-app-accent animate-pulse'
-                                    : 'text-app-text-muted hover:text-white hover:bg-app-accent active:scale-95'
-                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyTokenSnippet(k);
+                                }}
+                                className="p-1 text-app-text-muted hover:text-app-text hover:bg-app-token-pill-bg rounded-md transition-colors"
+                                title="Copy code snippet"
                               >
-                                <Play size={10} className={isPlaying ? 'fill-current' : ''} />
-                                <span className="hidden xl:inline">Play</span>
+                                <Code2 size={13} />
                               </button>
 
-                              {/* [ ↓ ] Download WAV */}
+                              {/* Download WAV Icon */}
                               <button
                                 type="button"
-                                onClick={() => handleDownloadTokenWav(k, v)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadTokenWav(k, v);
+                                }}
                                 disabled={downloadingWavToken === k}
-                                title={`Download ${k.replace(/\./g, '-')}.wav`}
-                                className="p-1 rounded text-app-text-muted hover:text-app-accent hover:bg-app-surface active:scale-95 transition-all"
+                                className="p-1 text-app-text-muted hover:text-app-accent hover:bg-app-token-pill-bg rounded-md transition-colors disabled:opacity-50"
+                                title="Download WAV audio"
                               >
                                 {downloadingWavToken === k ? (
-                                  <div className="w-2.5 h-2.5 border-2 border-app-accent border-t-transparent rounded-full animate-spin" />
+                                  <div className="w-3 h-3 border-2 border-app-accent/30 border-t-app-accent rounded-full animate-spin" />
                                 ) : (
-                                  <ArrowDown size={11} />
+                                  <Download size={13} />
                                 )}
                               </button>
 
+                              {/* More Options / Edit Icon */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditTokenKey(k);
+                                }}
+                                className="p-1 text-app-text-muted hover:text-app-text hover:bg-app-token-pill-bg rounded-md transition-colors"
+                                title="Edit token"
+                              >
+                                <MoreHorizontal size={13} />
+                              </button>
                             </div>
                           </div>
 
-                          {/* Secondary tag showing either Interaction or Category + Playing status */}
-                          <div className="flex items-center justify-between gap-1.5 mb-2">
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-app-surface-light text-app-text-muted border border-app-border/60">
-                              {groupBy === 'interaction' ? v.category : (v.interaction || 'Input')}
+                          {/* Middle: Category Pill on left + Circular Play/Pause button and Waveform on right */}
+                          <div className="flex items-center justify-between gap-2 my-1">
+                            <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-app-token-pill-bg border border-app-token-border/80 text-app-text-muted truncate max-w-[120px]">
+                              {groupBy === 'interaction' ? (v.interaction || 'Interaction') : v.category}
                             </span>
 
-                            {isPlaying && (
-                              <span className="flex items-center gap-1 text-[9px] font-mono text-app-accent font-semibold animate-pulse">
-                                <Activity size={10} className="animate-spin" /> Playing...
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isPlaying) {
+                                    pauseComponent(k);
+                                  } else {
+                                    selectComponentToken(k, v);
+                                    playComponent(k);
+                                  }
+                                }}
+                                title={isPlaying ? `Pause ${k}` : `Play ${k}`}
+                                className={`w-7 h-7 rounded-full border flex items-center justify-center transition-all shrink-0 ${
+                                  isPlaying
+                                    ? 'bg-app-accent border-app-accent text-white shadow-sm ring-2 ring-app-accent/40 animate-pulse'
+                                    : 'bg-app-token-bg border-app-token-border text-app-text hover:bg-app-token-bg-hover hover:border-app-accent/50 active:scale-95'
+                                }`}
+                              >
+                                {isPlaying ? (
+                                  <Pause size={11} className="fill-current" />
+                                ) : (
+                                  <Play size={11} className="fill-current translate-x-0.5" />
+                                )}
+                              </button>
+
+                              <MiniWaveform isPlaying={isPlaying} barCount={10} />
+                            </div>
                           </div>
-                          
-                          <span className="text-[10px] text-app-text-muted mt-auto line-clamp-1">{v.desc}</span>
-                          
-                          <div className="absolute bottom-2 right-2 text-[9px] font-mono text-app-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
-                            {badgeText}
-                          </div>
+
+                          {/* Bottom Description */}
+                          <p className="text-[11px] text-app-text-muted truncate mt-0.5">
+                            {v.desc || 'Interaction trigger'}
+                          </p>
                         </div>
-                        
-                        <div className="absolute -top-3 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setEditTokenKey(k); }}
-                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-text hover:border-app-text shadow-xs"
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setShowAssignModal(k); setAssignInput(''); }}
-                            className="bg-app-surface-light border border-app-border text-[9px] uppercase px-2 py-0.5 rounded text-app-text-muted hover:text-app-accent hover:border-app-accent shadow-xs"
-                          >
-                            Assign
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* RIGHT COL: INSPECTOR */}
-        <div className="w-[300px] border-l border-app-border bg-app-surface flex flex-col">
-          <div className="p-4 border-b border-app-border">
-            <h2 className="text-[10px] uppercase tracking-widest text-app-text-muted font-bold flex items-center gap-2">
-              <Info size={12} /> Active Inspector
-            </h2>
-          </div>
-          
-          <div className="p-4 flex-1 overflow-y-auto">
-            {!activeToken ? (
-              <div className="flex flex-col h-full text-app-text-muted opacity-50 space-y-4 pt-8">
-                <div className="text-[10px] uppercase tracking-widest text-center mb-4">Resolution Chain</div>
-                
-                <div className="border border-dashed border-app-border rounded p-3 text-center bg-app-surface-light">
-                  <div className="text-[11px] font-mono">COMPONENT</div>
-                  <div className="text-[9px] mt-1 opacity-50">token name will appear here</div>
-                </div>
-                
-                <div className="flex justify-center"><div className="w-px h-6 bg-app-border"></div></div>
-                
-                <div className="border border-dashed border-app-border rounded p-3 text-center bg-app-surface-light">
-                  <div className="text-[11px] font-mono">SEMANTIC</div>
-                  <div className="text-[9px] mt-1 opacity-50">meaning layer</div>
-                </div>
-                
-                <div className="flex justify-center"><div className="w-px h-6 bg-app-border"></div></div>
-                
-                <div className="border border-dashed border-app-border rounded p-3 text-center bg-app-surface-light">
-                  <div className="text-[11px] font-mono">PRIMITIVE</div>
-                  <div className="text-[9px] mt-1 opacity-50">brand DNA</div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                
-                {/* Chain Visualization */}
-                <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-widest text-app-text-muted mb-3">Resolution Chain</div>
-                  
-                  <div className="bg-app-surface-light border border-app-border rounded p-3">
-                    <div className="text-[11px] font-mono text-app-accent break-words">{activeToken.component}</div>
-                  </div>
-                  
-                  <div className="flex justify-center py-1">
-                    <div className="w-px h-4 bg-app-accent animate-pulse relative">
-                      <div className="absolute -bottom-1 -left-1 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-app-accent"></div>
-                    </div>
-                  </div>
+          {/* Attached Tab Present on Right Edge When Inspector is Collapsed */}
+          {!inspectorOpen && (
+            <button
+              onClick={() => setInspectorOpen(true)}
+              title="Open Active Inspector"
+              className="w-9 border-l border-y border-app-border bg-app-surface hover:bg-app-surface-light hover:border-app-accent flex flex-col items-center justify-center py-6 gap-3 shrink-0 shadow-md transition-all group cursor-pointer z-20"
+            >
+              <ChevronLeft size={16} className="text-app-text-muted group-hover:text-app-accent transition-colors" />
+              <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-widest text-app-text group-hover:text-app-accent transition-colors">
+                ACTIVE INSPECTOR
+              </span>
+            </button>
+          )}
 
-                  <div className="bg-app-surface-light border border-app-border rounded p-3">
-                    <div className="text-[11px] font-mono text-app-text break-words">semantic.{activeToken.semantic}</div>
-                  </div>
-
-                  <div className="flex justify-center py-1">
-                    <div className="w-px h-4 bg-app-accent animate-pulse relative">
-                      <div className="absolute -bottom-1 -left-1 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-app-accent"></div>
-                    </div>
-                  </div>
-
-                  <div className="bg-app-surface-light border border-app-border rounded p-3">
-                    <div className="text-[11px] font-mono text-app-text-muted">brand.scale.degree {activeToken.resolved.degrees.join(', ')}</div>
-                    <div className="text-[11px] font-mono text-app-text-muted mt-1">brand.decay.unit</div>
-                    <div className="text-[11px] font-mono text-app-text-muted mt-1">brand.timbre</div>
-                  </div>
-                </div>
-
-                {/* Final Parameters */}
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-app-text-muted mb-3">Classification & Synthesis</div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between border-b border-app-border pb-2">
-                      <span className="text-[11px] text-app-text-muted">Interaction</span>
-                      <span className="text-[11px] font-mono text-app-accent font-semibold">
-                        {activeToken.interaction || 'Input'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-app-border pb-2">
-                      <span className="text-[11px] text-app-text-muted">DLS Category</span>
-                      <span className="text-[11px] font-mono text-app-text">
-                        {activeToken.category || 'UI Interactions'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-app-border pb-2">
-                      <span className="text-[11px] text-app-text-muted">Notes</span>
-                      <span className="text-[11px] font-mono text-app-text">
-                        {activeToken.resolved.notes.map((n, i) => `${n} (${Math.round(activeToken.resolved.freqs[i])}Hz)`).join(', ')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-app-border pb-2">
-                      <span className="text-[11px] text-app-text-muted">Duration</span>
-                      <span className="text-[11px] font-mono text-app-text">
-                        {Math.round(activeToken.resolved.dur * 1000)} ms
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-app-border pb-2">
-                      <span className="text-[11px] text-app-text-muted">Vol. Offset</span>
-                      <span className="text-[11px] font-mono text-app-text">
-                        {activeToken.resolved.vol > 0 ? '+' : ''}{activeToken.resolved.vol.toFixed(1)} dB
-                      </span>
-                    </div>
-                    <div className="flex justify-between pb-2">
-                      <span className="text-[11px] text-app-text-muted">Timbre</span>
-                      <span className="text-[11px] font-mono text-app-text uppercase">
-                        {typeof brand.timbre === 'object' && brand.timbre !== null && brand.timbre.type === 'custom'
-                          ? 'CUSTOM (PERIODIC WAVE)'
-                          : String(brand.timbre)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Inspector Component Playback Control */}
-                <div className="pt-2">
+          {/* RIGHT COL: ACTIVE INSPECTOR (Collapsible) */}
+          {inspectorOpen && (
+            <div className="w-[310px] xl:w-[330px] border-l border-app-border bg-app-surface flex flex-col justify-between p-5 shrink-0 overflow-y-auto animate-in slide-in-from-right-4 duration-200">
+              <div className="space-y-5">
+                {/* Header: ACTIVE INSPECTOR + Collapse Button */}
+                <div className="flex items-center justify-between pb-1.5 border-b border-app-border">
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => playComponent(activeToken.component)}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded text-xs font-semibold uppercase tracking-wider transition-all shadow-xs ${
-                        playingComponents.has(activeToken.component)
-                          ? 'bg-app-accent text-white ring-2 ring-app-accent/60 font-bold animate-pulse'
-                          : 'bg-app-accent text-white hover:bg-blue-600 active:scale-95'
-                      }`}
-                    >
-                      <Play size={13} className={playingComponents.has(activeToken.component) ? 'fill-current' : ''} />
-                      <span>{playingComponents.has(activeToken.component) ? 'Playing Token...' : 'Play Token'}</span>
-                    </button>
+                    <h2 className="text-xs uppercase tracking-wider font-semibold text-app-text">
+                      ACTIVE INSPECTOR
+                    </h2>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-app-surface-light border border-app-border text-app-text-muted font-medium">
+                      Live
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setInspectorOpen(false)}
+                    className="p-1 rounded-lg text-app-text-muted hover:text-app-text hover:bg-app-surface-light transition-colors"
+                    title="Collapse inspector"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                {/* RESOLUTION CHAIN */}
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-app-text-muted font-semibold mb-2.5">
+                    RESOLUTION CHAIN
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {/* 1. Component Card */}
+                    <div className="border border-app-token-border rounded-xl p-3 text-center bg-app-token-bg shadow-2xs">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-app-text">
+                        COMPONENT
+                      </div>
+                      <div className="text-xs text-app-text font-mono font-medium mt-0.5 truncate">
+                        {activeToken ? activeToken.component : 'ui.knob.rotate'}
+                      </div>
+                    </div>
+
+                    <div className="text-center text-xs text-app-text-muted/60 my-0.5 font-medium">↓</div>
+
+                    {/* 2. Semantic Card */}
+                    <div className="border border-app-token-border rounded-xl p-3 text-center bg-app-token-bg shadow-2xs">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-app-text">
+                        SEMANTIC
+                      </div>
+                      <div className="text-xs text-app-accent font-mono font-medium mt-0.5 truncate">
+                        {activeToken ? `semantic.${activeToken.semantic}` : 'semantic.neutral'}
+                      </div>
+                    </div>
+
+                    <div className="text-center text-xs text-app-text-muted/60 my-0.5 font-medium">↓</div>
+
+                    {/* 3. Primitive Card */}
+                    <div className="border border-app-token-border rounded-xl p-3 text-center bg-app-token-bg shadow-2xs">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-app-text">
+                        PRIMITIVE
+                      </div>
+                      <div className="text-xs text-app-text-muted mt-0.5 font-medium">
+                        brand DNA ({brand.scale.split(' ')[0]})
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-              </div>
-            )}
-          </div>
-        </div>
+                {/* TOKEN DETAILS */}
+                <div className="space-y-3 pt-1">
+                  <div className="text-xs uppercase tracking-wider text-app-text-muted font-semibold mb-1.5">
+                    TOKEN DETAILS
+                  </div>
 
-      </div>
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-app-border/50">
+                    <span className="text-app-text-muted font-medium">Name</span>
+                    <span className="font-mono font-medium text-app-text text-right truncate max-w-[170px]">
+                      {activeToken ? activeToken.component : 'ui.knob.rotate'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-app-border/50">
+                    <span className="text-app-text-muted font-medium">Category</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-app-token-pill-bg border border-app-token-border text-app-text">
+                      {activeToken ? (activeToken.interaction || activeToken.category || 'Interaction') : 'Interaction'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-app-border/50">
+                    <span className="text-app-text-muted font-medium">Type</span>
+                    <span className="text-app-text font-semibold">Audio DLS</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-app-border/50">
+                    <span className="text-app-text-muted font-medium">Scale</span>
+                    <select
+                      value={brand.scale.split(' ')[0].replace(/[0-9]/g, '')}
+                      onChange={e => {
+                        const parts = brand.scale.split(' ');
+                        const octave = parts[0].replace(/[^0-9]/g, '');
+                        const scaleType = parts.slice(1).join(' ');
+                        setBrand(b => ({ ...b, scale: `${e.target.value}${octave} ${scaleType}` }));
+                      }}
+                      className="h-7 px-2 text-xs font-semibold bg-app-surface border border-app-border rounded-lg text-app-text outline-none"
+                    >
+                      {['C', 'C#', 'D', 'D#', 'E', 'F', 'G', 'A', 'B'].map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs py-1 border-b border-app-border/50">
+                    <span className="text-app-text-muted font-medium">Octave</span>
+                    <select
+                      value={brand.scale.split(' ')[0].replace(/[^0-9]/g, '')}
+                      onChange={e => {
+                        const parts = brand.scale.split(' ');
+                        const note = parts[0].replace(/[0-9]/g, '');
+                        const scaleType = parts.slice(1).join(' ');
+                        setBrand(b => ({ ...b, scale: `${note}${e.target.value} ${scaleType}` }));
+                      }}
+                      className="h-7 px-2 text-xs font-semibold bg-app-surface border border-app-border rounded-lg text-app-text outline-none"
+                    >
+                      {[2, 3, 4, 5, 6].map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs py-1">
+                    <span className="text-app-text-muted font-medium">Timbre</span>
+                    <select
+                      value={typeof brand.timbre === 'object' ? 'sine' : brand.timbre}
+                      onChange={e => setBrand(b => ({ ...b, timbre: e.target.value as any }))}
+                      className="h-7 px-2 text-xs font-semibold bg-app-surface border border-app-border rounded-lg text-app-text outline-none capitalize"
+                    >
+                      {['sine', 'triangle', 'square', 'sawtooth'].map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Audio Player Bar with waveform and time */}
+              <div className="mt-5 pt-3.5 border-t border-app-border/60">
+                <div className="p-2.5 rounded-xl border border-app-token-border bg-app-token-bg flex items-center justify-between gap-3 shadow-2xs">
+                  {(() => {
+                    const tokenToPlay = activeToken?.component || 'ui.knob.rotate';
+                    const isPlayingActive = playingComponents.has(tokenToPlay);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isPlayingActive) {
+                            pauseComponent(tokenToPlay);
+                          } else {
+                            playComponent(tokenToPlay);
+                          }
+                        }}
+                        className="w-8 h-8 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all shrink-0 shadow-xs"
+                        title={isPlayingActive ? `Pause ${tokenToPlay}` : `Play ${tokenToPlay}`}
+                      >
+                        {isPlayingActive ? (
+                          <Pause size={12} className="fill-current" />
+                        ) : (
+                          <Play size={12} className="fill-current translate-x-0.5" />
+                        )}
+                      </button>
+                    );
+                  })()}
+
+                  {/* Waveform track with dots */}
+                  <div className="flex items-center gap-1 flex-1 overflow-hidden px-1">
+                    {[12, 24, 40, 20, 16, 32, 48, 60, 36, 20, 14, 28, 44, 30, 18, 12, 10, 8, 6].map((h, i) => (
+                      <span
+                        key={i}
+                        className="w-[2px] bg-app-text-muted/40 rounded-full"
+                        style={{ height: `${h * 0.4}px` }}
+                      />
+                    ))}
+                  </div>
+
+                  <span className="text-[10px] font-mono text-app-text-muted shrink-0">
+                    0:00 / 0:02
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tokenToEdit = activeToken?.component || 'ui.knob.rotate';
+                      setEditTokenKey(tokenToEdit);
+                    }}
+                    className="p-1 text-app-text-muted hover:text-app-text rounded transition-colors shrink-0"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
       )}
-      </Suspense>
 
       {showCreateToken && (
-        <Suspense fallback={null}>
-          <CreateTokenPanel 
-            brand={brand}
-            semanticDefs={semanticDefs}
-            onClose={() => setShowCreateToken(false)}
-            onAddComponent={(name, def) => {
-              setCustomTokens(prev => ({ ...prev, [name]: def }));
-              setShowCreateToken(false);
-            }}
-            onAddSemantic={(key, def) => {
-              handleAddSemanticToken(key, def);
-              setShowCreateToken(false);
-            }}
-          />
-        </Suspense>
+        <CreateTokenPanel
+          brand={brand}
+          semanticDefs={semanticDefs}
+          onClose={() => setShowCreateToken(false)}
+          onAddComponent={(name, def) => {
+            setCustomTokens(prev => ({ ...prev, [name]: def }));
+            setShowCreateToken(false);
+          }}
+          onAddSemantic={(key, def) => {
+            handleAddSemanticToken(key, def);
+            setShowCreateToken(false);
+          }}
+        />
       )}
 
       {editTokenKey && (
-        <Suspense fallback={null}>
-          <CreateTokenPanel 
-            brand={brand}
-            semanticDefs={semanticDefs}
-            initialData={{ type: 'component', name: editTokenKey, def: allDefsCombined[editTokenKey as keyof typeof allDefsCombined] }}
-            onClose={() => setEditTokenKey(null)}
-            onAddComponent={(name, def, originalName) => {
-              setCustomTokens(prev => {
-                const next = { ...prev, [name]: def };
-                if (originalName && originalName !== name) {
-                  delete next[originalName];
-                }
-                return next;
-              });
-              setEditTokenKey(null);
-            }}
-            onAddSemantic={(key, def) => {
-              handleAddSemanticToken(key, def);
-              setEditTokenKey(null);
-            }}
-          />
-        </Suspense>
+        <CreateTokenPanel
+          brand={brand}
+          semanticDefs={semanticDefs}
+          initialData={{ type: 'component', name: editTokenKey, def: allDefsCombined[editTokenKey as keyof typeof allDefsCombined] }}
+          onClose={() => setEditTokenKey(null)}
+          onAddComponent={(name, def, originalName) => {
+            setCustomTokens(prev => {
+              const next = { ...prev, [name]: def };
+              if (originalName && originalName !== name) {
+                delete next[originalName];
+              }
+              return next;
+            });
+            setEditTokenKey(null);
+          }}
+          onAddSemantic={(key, def) => {
+            handleAddSemanticToken(key, def);
+            setEditTokenKey(null);
+          }}
+        />
       )}
 
       {showAssignModal && (
-        <Suspense fallback={null}>
-          <AssignModal 
-            token={showAssignModal}
-            onClose={() => setShowAssignModal(null)}
-            onAssign={(elementName) => {
-              setAssignments(prev => ({ ...prev, [elementName]: showAssignModal }));
-              setShowAssignModal(null);
-            }}
-          />
-        </Suspense>
+        <AssignModal
+          token={showAssignModal}
+          onClose={() => setShowAssignModal(null)}
+          onAssign={(elementName) => {
+            setAssignments(prev => ({ ...prev, [elementName]: showAssignModal }));
+            setShowAssignModal(null);
+          }}
+        />
       )}
 
       {showEditSemantic && (
-        <Suspense fallback={null}>
-          <EditSemanticModal 
-            initialDefs={semanticDefs}
-            onClose={() => setShowEditSemantic(false)}
-            onSave={(defs) => {
-              setSemanticDefs(defs);
-              setShowEditSemantic(false);
-            }}
-          />
-        </Suspense>
+        <EditSemanticModal
+          initialDefs={semanticDefs}
+          onClose={() => setShowEditSemantic(false)}
+          onSave={(defs) => {
+            setSemanticDefs(defs);
+            setShowEditSemantic(false);
+          }}
+        />
       )}
 
       {/* THEME PREVIEW MODAL */}
@@ -1240,6 +1553,21 @@ export default function App(): ReactElement {
         onClose={() => setShowThemePreviewModal(false)}
       />
 
+      {/* SONIC CHARACTER PRESETS MODAL (Matches image.png) */}
+      <SonicPresetsModal
+        isOpen={showSonicPresetsModal}
+        onClose={() => setShowSonicPresetsModal(false)}
+        currentBrand={brand}
+        currentSemantics={semanticDefs}
+        onApplyPreset={handleApplySonicPreset}
+      />
+
+      {/* TOAST NOTIFICATION (CHANGE 2) */}
+      {copiedTokenToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-emerald-500 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold animate-fade-in">
+          <Check size={14} /> Copied!
+        </div>
+      )}
     </div>
   );
 }

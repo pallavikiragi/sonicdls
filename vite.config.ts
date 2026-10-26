@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: '/sonicdls/',
+    base: process.env.GITHUB_ACTIONS ? '/sonicdls/' : '/',
     plugins: [react(), tailwindcss()],
     build: {
       rollupOptions: {

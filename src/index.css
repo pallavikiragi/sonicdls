@@ -38,7 +38,7 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
+  --radius: 0.25rem;
   --shadow-x: 0;
   --shadow-y: 1px;
   --shadow-blur: 3px;
@@ -68,6 +68,15 @@
   --app-accent: var(--primary);
   --app-secondary: var(--accent);
   --app-amber: oklch(0.7724 0.1728 65.3670);
+
+  /* Sonic preset dynamic subtle hue variables (Light Mode) */
+  --app-nav-bg: color-mix(in srgb, var(--app-accent) 4.5%, var(--card));
+  --app-nav-border: color-mix(in srgb, var(--app-accent) 12%, var(--border));
+  --app-nav-controls-bg: color-mix(in srgb, var(--app-accent) 6.5%, var(--secondary));
+  --app-token-bg: color-mix(in srgb, var(--app-accent) 5.5%, var(--card));
+  --app-token-bg-hover: color-mix(in srgb, var(--app-accent) 9.5%, var(--card));
+  --app-token-border: color-mix(in srgb, var(--app-accent) 15%, var(--border));
+  --app-token-pill-bg: color-mix(in srgb, var(--app-accent) 8%, var(--secondary));
 }
 
 .dark, html.dark {
@@ -106,7 +115,7 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
+  --radius: 0.375rem;
   --shadow-x: 0;
   --shadow-y: 1px;
   --shadow-blur: 3px;
@@ -134,6 +143,15 @@
   --app-accent: var(--primary);
   --app-secondary: var(--accent);
   --app-amber: oklch(0.7724 0.1728 65.3670);
+
+  /* Sonic preset dynamic subtle hue variables (Dark Mode) */
+  --app-nav-bg: color-mix(in srgb, var(--app-accent) 7.5%, var(--card));
+  --app-nav-border: color-mix(in srgb, var(--app-accent) 18%, var(--border));
+  --app-nav-controls-bg: color-mix(in srgb, var(--app-accent) 10%, var(--secondary));
+  --app-token-bg: color-mix(in srgb, var(--app-accent) 8.5%, var(--card));
+  --app-token-bg-hover: color-mix(in srgb, var(--app-accent) 13%, var(--card));
+  --app-token-border: color-mix(in srgb, var(--app-accent) 22%, var(--border));
+  --app-token-pill-bg: color-mix(in srgb, var(--app-accent) 12%, var(--secondary));
 }
 
 @theme {
@@ -167,6 +185,15 @@
   --color-app-accent: var(--app-accent);
   --color-app-secondary: var(--app-secondary);
   --color-app-amber: var(--app-amber);
+
+  /* Dynamic preset hue tinted colors */
+  --color-app-nav-bg: var(--app-nav-bg);
+  --color-app-nav-border: var(--app-nav-border);
+  --color-app-nav-controls-bg: var(--app-nav-controls-bg);
+  --color-app-token-bg: var(--app-token-bg);
+  --color-app-token-bg-hover: var(--app-token-bg-hover);
+  --color-app-token-border: var(--app-token-border);
+  --color-app-token-pill-bg: var(--app-token-pill-bg);
 
   --font-sans: var(--app-font-sans);
   --font-mono: var(--app-font-mono);
