@@ -37,9 +37,9 @@ export function SdkPanel({
 
   const getInstallCommand = () => {
     switch (packageManager) {
-      case 'pnpm': return 'pnpm add @pallavikiragi/sonic-design-system tone';
-      case 'yarn': return 'yarn add @pallavikiragi/sonic-design-system tone';
-      default: return 'npm install @pallavikiragi/sonic-design-system tone';
+      case 'pnpm': return 'pnpm add @pallavikiragi/sonic-design-system@beta tone';
+      case 'yarn': return 'yarn add @pallavikiragi/sonic-design-system@beta tone';
+      default: return 'npm install @pallavikiragi/sonic-design-system@beta tone';
     }
   };
 
