@@ -37,9 +37,9 @@ export function SdkPanel({
 
   const getInstallCommand = () => {
     switch (packageManager) {
-      case 'pnpm': return 'pnpm add @studio/sonic-dls tone';
-      case 'yarn': return 'yarn add @studio/sonic-dls tone';
-      default: return 'npm install @studio/sonic-dls tone';
+      case 'pnpm': return 'pnpm add @pallavikiragi/sonic-design-system tone';
+      case 'yarn': return 'yarn add @pallavikiragi/sonic-design-system tone';
+      default: return 'npm install @pallavikiragi/sonic-design-system tone';
     }
   };
 
@@ -70,7 +70,7 @@ export function SdkPanel({
   // Download standalone package starter zip simulation/guide
   const handleDownloadStandalone = () => {
     const packageJson = {
-      name: "@studio/sonic-dls",
+      name: "@pallavikiragi/sonic-design-system",
       version: "1.4.0",
       description: "Mathematical Sound Design Language System (Sonic DLS) runtime engine",
       main: "dist/index.cjs",
@@ -232,7 +232,7 @@ export function SdkPanel({
                 let code = '';
                 if (usageTab === 'react') {
                   code = `import React from 'react';
-import { useSonicDLS } from '@studio/sonic-dls';
+import { useSonicDLS } from '@pallavikiragi/sonic-design-system';
 
 export function ActionButton() {
   const { play, pause } = useSonicDLS();
@@ -250,7 +250,7 @@ export function ActionButton() {
                 } else if (usageTab === 'nextjs') {
                   code = `'use client';
 import { useEffect } from 'react';
-import { SonicDLSProvider, useSonicToken } from '@studio/sonic-dls/react';
+import { SonicDLSProvider, useSonicToken } from '@pallavikiragi/sonic-design-system/react';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -260,7 +260,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   );
 }`;
                 } else if (usageTab === 'vanilla') {
-                  code = `import { SonicDLS } from '@studio/sonic-dls';
+                  code = `import { SonicDLS } from '@pallavikiragi/sonic-design-system';
 
 const dls = new SonicDLS({
   scale: 'C4 major pentatonic',
@@ -278,7 +278,7 @@ document.querySelector('#stop-btn').addEventListener('click', () => {
   dls.stop('voice.listening');
 });`;
                 } else {
-                  code = `import { resolveSonicToken } from '@studio/sonic-dls/core';
+                  code = `import { resolveSonicToken } from '@pallavikiragi/sonic-design-system/core';
 
 // Pure mathematical resolver (No Web Audio API required)
 const resolved = resolveSonicToken('ui.button.confirm', {
@@ -311,7 +311,7 @@ console.log(resolved);
           <pre className="pr-20 leading-relaxed text-[12px]">
             {usageTab === 'react' && (
 `import React from 'react';
-import { useSonicDLS } from '@studio/sonic-dls';
+import { useSonicDLS } from '@pallavikiragi/sonic-design-system';
 
 export function ActionButton() {
   const { play, pause } = useSonicDLS();
@@ -331,7 +331,7 @@ export function ActionButton() {
             {usageTab === 'nextjs' && (
 `'use client';
 import React from 'react';
-import { SonicDLSProvider, useSonicToken } from '@studio/sonic-dls/react';
+import { SonicDLSProvider, useSonicToken } from '@pallavikiragi/sonic-design-system/react';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -343,7 +343,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
 
             {usageTab === 'vanilla' && (
-`import { SonicDLS } from '@studio/sonic-dls';
+`import { SonicDLS } from '@pallavikiragi/sonic-design-system';
 
 const dls = new SonicDLS({
   scale: 'C4 major pentatonic',
@@ -363,7 +363,7 @@ document.querySelector('#stop-btn').addEventListener('click', () => {
             )}
 
             {usageTab === 'react-native' && (
-`import { resolveSonicToken } from '@studio/sonic-dls/core';
+`import { resolveSonicToken } from '@pallavikiragi/sonic-design-system/core';
 
 // Pure mathematical resolver (Zero audio device dependencies)
 const resolved = resolveSonicToken('ui.button.confirm', {

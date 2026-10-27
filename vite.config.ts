@@ -8,6 +8,7 @@ export default defineConfig(() => {
     base: process.env.GITHUB_ACTIONS ? '/sonicdls/' : '/',
     plugins: [react(), tailwindcss()],
     build: {
+      outDir: 'dist-site',
       rollupOptions: {
         output: {
           manualChunks(id) {

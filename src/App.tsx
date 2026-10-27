@@ -371,7 +371,7 @@ export default function App() {
   };
 
   const handleCopyTokenSnippet = (tokenKey: string) => {
-    const snippet = `import { SonicDLS } from '@studio/sonic-dls'
+    const snippet = `import { SonicDLS } from '@pallavikiragi/sonic-design-system'
 import tokens from './sonic-dls-export.json'
 const dls = new SonicDLS(tokens)
 dls.play('${tokenKey}')`;

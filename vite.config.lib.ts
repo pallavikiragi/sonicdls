@@ -12,12 +12,11 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      external: (id) =>
-        id === 'react' ||
-        id.startsWith('react/') ||
-        id === 'react-dom' ||
-        id.startsWith('react-dom/')
-    }
+  external: (id) =>
+  id === 'react' || id.startsWith('react/') ||
+  id === 'react-dom' || id.startsWith('react-dom/') ||
+  id === 'tone' || id.startsWith('tone/')
+}
   },
   resolve: {
     alias: {
