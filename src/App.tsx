@@ -54,7 +54,7 @@ export default function App() {
   const [downloadingWavToken, setDownloadingWavToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
   const [showThemePreviewModal, setShowThemePreviewModal] = useState<boolean>(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   // Grouping mode for Tokens tab: By Interaction (new) vs By Category (classic DLS)
   const [groupBy, setGroupBy] = useState<'interaction' | 'category'>('interaction');
@@ -99,7 +99,7 @@ export default function App() {
     resolved: { degrees: number[]; notes: string[]; freqs: number[]; dur: number; vol: number };
   } | null>(null);
 
-  const [expanded, setExpanded] = useState({ primitive: true, semantic: true, component: true });
+  const [expanded, setExpanded] = useState({ primitive: false, semantic: false, component: false });
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [isExportingWav, setIsExportingWav] = useState(false);
   const [showSonicPresetsModal, setShowSonicPresetsModal] = useState(false);
@@ -282,6 +282,8 @@ export default function App() {
     Object.entries(semanticDefs).forEach(([k, v]: [string, any]) => {
       semanticExport[k] = {
         degrees: v.degrees,
+        durMult: v.durMult,
+        volOffset: v.volOffset,
         duration: brand.decayUnit * v.durMult * 1000,
         volume: brand.volumeBase + v.volOffset
       };
@@ -314,7 +316,8 @@ export default function App() {
         resolvedFreqs: resolvedNotes.map(n => n.freq),
         resolvedDuration: dur * 1000,
         resolvedVolume: vol,
-        custom: !!customTokens[k]
+        custom: !!customTokens[k],
+        overrides: v.overrides || {}
       };
     });
 
@@ -606,7 +609,9 @@ dls.play('${tokenKey}')`;
         </div>
 
         {/* PARAMETER CONTROLS BAR (Balanced, uncluttered typographic hierarchy) */}
-        <div className="px-8 py-3.5 border-t border-app-nav-border flex flex-wrap items-center justify-between gap-6 text-app-text bg-app-nav-bg/60">
+        <div className="px-8 py-3.5 border-t border-app-nav-border flex flex-col gap-3 text-app-text bg-app-nav-bg/60">
+          <div className="text-sm font-semibold text-app-text">Primitive (brand tokens)</div>
+          <div className="flex flex-wrap items-center justify-between gap-6">
           {/* Cluster 1: SCALE */}
           <div className="flex items-center gap-3">
             <div className="flex flex-col gap-1">
@@ -853,6 +858,7 @@ dls.play('${tokenKey}')`;
                 className="accent-app-accent w-full h-1 bg-app-border rounded-lg cursor-pointer"
               />
             </div>
+          </div>
           </div>
         </div>
       </div>
