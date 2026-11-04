@@ -6,6 +6,62 @@ import {
 } from 'lucide-react';
 import { BrandTokens, COMPONENT_DEFS, SEMANTIC_DEFS, resolveNotes, audioEngine } from '../lib/audio';
 
+const USAGE_SNIPPETS: Record<string, string> = {
+  react: `import { sonic } from '@pallavikiragi/sonic-design-system';
+import tokens from './sonic-dls-export.json';
+
+// Load the exported tokens once, at app start
+sonic.configure(tokens);
+
+export function ActionButton() {
+  return (
+    <button onClick={() => sonic.play('ui.button.confirm')}>
+      Confirm Action
+    </button>
+  );
+}`,
+
+  nextjs: `'use client';
+import { useEffect } from 'react';
+import { sonic } from '@pallavikiragi/sonic-design-system';
+import tokens from './sonic-dls-export.json';
+
+export default function ActionButton() {
+  // Load the exported tokens once, in the browser
+  useEffect(() => {
+    sonic.configure(tokens as any);
+  }, []);
+
+  return (
+    <button onClick={() => sonic.play('ui.button.confirm')}>
+      Confirm Action
+    </button>
+  );
+}`,
+
+  vanilla: `import { sonic } from '@pallavikiragi/sonic-design-system';
+import tokens from './sonic-dls-export.json';
+
+// Load the exported tokens once, at app start
+sonic.configure(tokens);
+
+document.querySelector('#confirm-btn').addEventListener('click', () => {
+  sonic.play('ui.button.confirm');
+});
+
+document.querySelector('#stop-btn').addEventListener('click', () => {
+  sonic.stopAll();
+});`,
+
+  'react-native': `// React Native is not supported yet.
+// The sound engine needs the Web Audio API, which React Native
+// does not include.
+//
+// For native apps: in the Sonic DLS app choose
+// Export > Export as WAV (ZIP), then play the files with
+// your platform's audio library.`,
+};
+
 interface SdkPanelProps {
   brand: BrandTokens;
   customTokens?: Record<string, any>;
@@ -229,67 +285,7 @@ export function SdkPanel({
           <div className="absolute top-3.5 right-3.5">
             <button
               onClick={() => {
-                let code = '';
-                if (usageTab === 'react') {
-                  code = `import React from 'react';
-import { useSonicDLS } from '@pallavikiragi/sonic-design-system';
-
-export function ActionButton() {
-  const { play, pause } = useSonicDLS();
-
-  return (
-    <button
-      onClick={() => play('ui.button.confirm')}
-      onMouseEnter={() => play('ui.knob.rotate')}
-      className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-    >
-      Confirm Action
-    </button>
-  );
-}`;
-                } else if (usageTab === 'nextjs') {
-                  code = `'use client';
-import { useEffect } from 'react';
-import { SonicDLSProvider, useSonicToken } from '@pallavikiragi/sonic-design-system/react';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <SonicDLSProvider preset="minimal" defaultVolume={-14}>
-      {children}
-    </SonicDLSProvider>
-  );
-}`;
-                } else if (usageTab === 'vanilla') {
-                  code = `import { SonicDLS } from '@pallavikiragi/sonic-design-system';
-
-const dls = new SonicDLS({
-  scale: 'C4 major pentatonic',
-  decayUnit: 0.160,
-  warmth: 0.90
-});
-
-// Play token on button click
-document.querySelector('#confirm-btn').addEventListener('click', () => {
-  dls.play('ui.button.confirm');
-});
-
-// Stop or pause looped ambient audio
-document.querySelector('#stop-btn').addEventListener('click', () => {
-  dls.stop('voice.listening');
-});`;
-                } else {
-                  code = `import { resolveSonicToken } from '@pallavikiragi/sonic-design-system/core';
-
-// Pure mathematical resolver (No Web Audio API required)
-const resolved = resolveSonicToken('ui.button.confirm', {
-  scale: 'C4 major pentatonic',
-  decayUnit: 0.160
-});
-
-console.log(resolved);
-// Output: { freq: 329.63, duration: 90, volume: -14, notes: ['E4'] }
-// Pass resolved frequencies directly to native sound synthesizers`;
-                }
+                const code = USAGE_SNIPPETS[usageTab] ?? '';
                 copyToClipboard(code, `usage-${usageTab}`);
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs font-semibold border border-zinc-800"
@@ -309,72 +305,7 @@ console.log(resolved);
           </div>
 
           <pre className="pr-20 leading-relaxed text-[12px]">
-            {usageTab === 'react' && (
-`import React from 'react';
-import { useSonicDLS } from '@pallavikiragi/sonic-design-system';
-
-export function ActionButton() {
-  const { play, pause } = useSonicDLS();
-
-  return (
-    <button
-      onClick={() => play('ui.button.confirm')}
-      onMouseEnter={() => play('ui.knob.rotate')}
-      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold"
-    >
-      Confirm Action
-    </button>
-  );
-}`
-            )}
-
-            {usageTab === 'nextjs' && (
-`'use client';
-import React from 'react';
-import { SonicDLSProvider, useSonicToken } from '@pallavikiragi/sonic-design-system/react';
-
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <SonicDLSProvider preset="minimal" defaultVolume={-14}>
-      {children}
-    </SonicDLSProvider>
-  );
-}`
-            )}
-
-            {usageTab === 'vanilla' && (
-`import { SonicDLS } from '@pallavikiragi/sonic-design-system';
-
-const dls = new SonicDLS({
-  scale: 'C4 major pentatonic',
-  decayUnit: 0.160,
-  warmth: 0.90
-});
-
-// Trigger synthesis anytime
-document.querySelector('#confirm-btn').addEventListener('click', () => {
-  dls.play('ui.button.confirm');
-});
-
-// Pause or stop specific tokens
-document.querySelector('#stop-btn').addEventListener('click', () => {
-  dls.stop('voice.listening');
-});`
-            )}
-
-            {usageTab === 'react-native' && (
-`import { resolveSonicToken } from '@pallavikiragi/sonic-design-system/core';
-
-// Pure mathematical resolver (Zero audio device dependencies)
-const resolved = resolveSonicToken('ui.button.confirm', {
-  scale: 'C4 major pentatonic',
-  decayUnit: 0.160
-});
-
-console.log(resolved);
-// Output: { freq: 329.63, duration: 90, volume: -14, notes: ['E4'] }
-// Pass resolved frequencies directly to native audio synthesizers`
-            )}
+            {USAGE_SNIPPETS[usageTab]}
           </pre>
         </div>
       </section>
