@@ -1,6 +1,6 @@
 {
   "name": "@pallavikiragi/sonic-design-system",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Synthesized UI sound tokens built on Tone.js",
   "keywords": [
     "ui sound",
